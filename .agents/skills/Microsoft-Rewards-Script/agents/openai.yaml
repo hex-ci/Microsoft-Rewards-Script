@@ -1,0 +1,6 @@
+interface:
+  display_name: "Microsoft Rewards Script"
+  short_description: "Repo-specific patterns and workflows for Microsoft-Rewards-Script"
+  default_prompt: "Use the Microsoft-Rewards-Script repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
