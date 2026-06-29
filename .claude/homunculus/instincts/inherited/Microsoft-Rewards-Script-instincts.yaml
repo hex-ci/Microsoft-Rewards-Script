@@ -1,0 +1,336 @@
+# Instincts generated from https://github.com/hex-ci/Microsoft-Rewards-Script
+# Generated: 2026-06-29T15:26:24.720Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: Microsoft-Rewards-Script-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Commit Length
+
+## Action
+
+Keep commit messages concise (~39 characters)
+
+## Evidence
+
+- Average commit message length: 39 chars
+- Based on 8 commits
+
+---
+id: Microsoft-Rewards-Script-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Naming Files
+
+## Action
+
+Use PascalCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: PascalCase
+
+---
+id: Microsoft-Rewards-Script-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: Microsoft-Rewards-Script-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: Microsoft-Rewards-Script-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: Microsoft-Rewards-Script-workflow-update-dashboard-queries
+trigger: "when doing update dashboard queries"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Workflow Update Dashboard Queries
+
+## Action
+
+Follow the update-dashboard-queries workflow:
+1. Edit src/functions/bing-search-activity-queries.json with new or updated queries.
+2. Commit the changes.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/functions/bing-search-activity-queries.json
+
+---
+id: Microsoft-Rewards-Script-workflow-version-bump-and-release
+trigger: "when doing version bump and release"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Workflow Version Bump And Release
+
+## Action
+
+Follow the version-bump-and-release workflow:
+1. Update version in package.json.
+2. Regenerate or update package-lock.json.
+3. Commit both files.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: package.json, package-lock.json
+
+---
+id: Microsoft-Rewards-Script-workflow-documentation-and-config-update
+trigger: "when doing documentation and config update"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Workflow Documentation And Config Update
+
+## Action
+
+Follow the documentation-and-config-update workflow:
+1. Edit README.md to clarify usage or update instructions.
+2. Edit config.example.json or compose.yaml as needed.
+3. Commit the changes.
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: README.md, config.example.json, compose.yaml
+
+---
+id: microsoft-rewards-script-instinct-naming-conventions
+trigger: "When creating or renaming files, functions, classes, or constants in the codebase."
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Instinct Naming Conventions
+
+## Action
+
+Use PascalCase for files and classes, camelCase for functions, and SCREAMING_SNAKE_CASE for constants.
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions
+- Consistent naming in src/functions, src/constants
+
+---
+id: microsoft-rewards-script-instinct-imports-exports
+trigger: "When importing or exporting modules in TypeScript files."
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Instinct Imports Exports
+
+## Action
+
+Use relative import paths and named exports.
+
+## Evidence
+
+- Pattern in codeStyle.importStyle and exportStyle
+- Seen in src/index.ts and other modules
+
+---
+id: microsoft-rewards-script-instinct-testing-location
+trigger: "When adding or updating tests for code in src/."
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Instinct Testing Location
+
+## Action
+
+Place test files in a separate test directory, not alongside source files.
+
+## Evidence
+
+- Pattern in architecture.testLocation: 'separate'
+
+---
+id: microsoft-rewards-script-instinct-testing-pattern
+trigger: "When writing new tests for functions or modules."
+confidence: 0.6
+domain: testing
+source: repo-analysis
+source_repo: hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Instinct Testing Pattern
+
+## Action
+
+Write tests in TypeScript, mirroring the structure of the source code modules.
+
+## Evidence
+
+- TypeScript as primary language
+- Separate test location
+
+---
+id: microsoft-rewards-script-instinct-commit-format
+trigger: "When writing a commit message."
+confidence: 0.8
+domain: git
+source: repo-analysis
+source_repo: hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Instinct Commit Format
+
+## Action
+
+Use concise, freeform commit messages without enforced prefixes; keep messages around 40 characters.
+
+## Evidence
+
+- Pattern in commits.examples
+- No prefix enforcement, average length 39
+
+---
+id: microsoft-rewards-script-instinct-update-dashboard-queries
+trigger: "When Microsoft updates the dashboard or search activity requirements, requiring new or modified queries."
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Instinct Update Dashboard Queries
+
+## Action
+
+Edit src/functions/bing-search-activity-queries.json with new or updated queries and commit the changes.
+
+## Evidence
+
+- Workflow: update-dashboard-queries
+- Commits: 'Update bing-search-activity-queries.json'
+
+---
+id: microsoft-rewards-script-instinct-version-bump-and-release
+trigger: "When preparing a new release or hotfix, especially after significant changes or to fix release issues."
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Instinct Version Bump And Release
+
+## Action
+
+Update version in package.json, regenerate or update package-lock.json, and commit both files.
+
+## Evidence
+
+- Workflow: version-bump-and-release
+- Commits: 'Bump to 4.0.1 to ensure proper version release'
+
+---
+id: microsoft-rewards-script-instinct-documentation-and-config-update
+trigger: "When features are added, workflows change, or deployment instructions/configs need clarification."
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: hex-ci/Microsoft-Rewards-Script
+---
+
+# Microsoft Rewards Script Instinct Documentation And Config Update
+
+## Action
+
+Edit README.md, config.example.json, or compose.yaml as needed and commit the changes.
+
+## Evidence
+
+- Workflow: documentation-and-config-update
+- Commits: 'Update compose.yaml to use prebuilt image instead of build. Fix formatting in readme (#524)'
+
