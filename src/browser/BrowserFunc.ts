@@ -633,7 +633,7 @@ export default class BrowserFunc {
         this.bot.logger.debug(
             this.bot.isMobile,
             'SEARCH-REPORT',
-            `Reported "${query}" | ig=${ig} | gained=${gained ?? 'n/a'} | balance=${parsed.balance ?? 'n/a'} | searchPts=${parsed.searchPointsEarned ?? 'n/a'}/${parsed.searchPointsLimit ?? 'n/a'}`
+            `Reported "${query}" | ig=${ig} | pointsGained=${gained ?? 'n/a'} | currentBalance=${parsed.balance ?? 'n/a'} | searchPts=${parsed.searchPointsEarned ?? 'n/a'}/${parsed.searchPointsLimit ?? 'n/a'}`
         )
 
         return { ig, ...parsed, gained }
@@ -730,7 +730,7 @@ export default class BrowserFunc {
         this.bot.logger.debug(
             this.bot.isMobile,
             'VISUAL-SEARCH-REPORT',
-            `Reported "${query}" | ig=${ig} | bcid=${bcid.slice(0, 12)} | gained=${gained ?? 'n/a'} | balance=${parsed.balance ?? 'n/a'} | searchPts=${parsed.searchPointsEarned ?? 'n/a'}/${parsed.searchPointsLimit ?? 'n/a'}`
+            `Reported "${query}" | ig=${ig} | bcid=${bcid.slice(0, 12)} | pointsGained=${gained ?? 'n/a'} | currentBalance=${parsed.balance ?? 'n/a'} | searchPts=${parsed.searchPointsEarned ?? 'n/a'}/${parsed.searchPointsLimit ?? 'n/a'}`
         )
 
         return { ig, ...parsed, gained }

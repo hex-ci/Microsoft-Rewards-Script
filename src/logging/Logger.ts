@@ -134,7 +134,11 @@ export class Logger {
                 sendNtfy(config.webhook.ntfy, cleanMsg, level)
             }
 
-            if (config.webhook.telegram?.enabled && config.webhook.telegram.botToken && config.webhook.telegram.chatId) {
+            if (
+                config.webhook.telegram?.enabled &&
+                config.webhook.telegram.botToken &&
+                config.webhook.telegram.chatId
+            ) {
                 if (level === 'debug') return
                 sendTelegram(config.webhook.telegram, cleanMsg, level)
             }

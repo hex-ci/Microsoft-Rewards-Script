@@ -22,7 +22,7 @@ export class ReadToEarn extends Workers {
         this.bot.logger.info(
             this.bot.isMobile,
             'READ-TO-EARN',
-            `Starting Read to Earn | geo=${this.bot.userData.geoLocale} | delayRange=${delayMin}-${delayMax} | currentPoints=${startBalance}`
+            `Starting Read to Earn | geo=${this.bot.userData.geoLocale} | delayRange=${delayMin}-${delayMax} | currentBalance=${startBalance}`
         )
 
         try {
@@ -78,14 +78,14 @@ export class ReadToEarn extends Workers {
                 this.bot.logger.debug(
                     this.bot.isMobile,
                     'READ-TO-EARN',
-                    `Balance delta after article | article=${i + 1}/${articleCount} | oldBalance=${oldBalance} | newBalance=${newBalance} | gainedPoints=${gainedPoints}`
+                    `Balance delta after article | article=${i + 1}/${articleCount} | previousBalance=${oldBalance} | currentBalance=${newBalance} | pointsGained=${gainedPoints}`
                 )
 
                 if (gainedPoints <= 0) {
                     this.bot.logger.info(
                         this.bot.isMobile,
                         'READ-TO-EARN',
-                        `No points gained, stopping Read to Earn | article=${i + 1}/${articleCount} | status=${response.status} | oldBalance=${oldBalance} | newBalance=${newBalance}`
+                        `No points gained, stopping Read to Earn | article=${i + 1}/${articleCount} | status=${response.status} | pointsGained=0 | currentBalance=${newBalance}`
                     )
                     break
                 }
@@ -100,7 +100,7 @@ export class ReadToEarn extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'READ-TO-EARN',
-                    `Read article ${i + 1}/${articleCount} | status=${response.status} | gainedPoints=${gainedPoints} | newBalance=${newBalance}`,
+                    `Read article ${i + 1}/${articleCount} | status=${response.status} | pointsGained=${gainedPoints} | currentBalance=${newBalance}`,
                     'green'
                 )
 
@@ -119,7 +119,7 @@ export class ReadToEarn extends Workers {
             this.bot.logger.info(
                 this.bot.isMobile,
                 'READ-TO-EARN',
-                `Completed Read to Earn | articlesRead=${articlesRead} | totalGained=${totalGained} | startBalance=${startBalance} | finalBalance=${finalBalance}`
+                `Completed Read to Earn | articlesRead=${articlesRead} | pointsGained=${totalGained} | previousBalance=${startBalance} | currentBalance=${finalBalance}`
             )
         } catch (error) {
             this.bot.logger.error(

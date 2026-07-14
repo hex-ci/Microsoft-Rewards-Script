@@ -27,7 +27,7 @@ export class EnsureStreakProtection extends Workers {
             this.bot.logger.info(
                 this.bot.isMobile,
                 'ENABLE-STREAK-PROTECTION',
-                `Already enabled (remainingDays=${before.remainingDays ?? '?'})`,
+                `Already enabled | remainingDays=${before.remainingDays ?? 'null'}`,
                 'green'
             )
             return
@@ -42,7 +42,9 @@ export class EnsureStreakProtection extends Workers {
             return
         }
 
-        const beforeDesc = before ? `on=${before.isProtectionOn},days=${before.remainingDays ?? '?'}` : 'unknown'
+        const beforeDesc = before
+            ? `enabled=${before.isProtectionOn},remainingDays=${before.remainingDays ?? 'null'}`
+            : 'unknown'
         this.bot.logger.info(
             this.bot.isMobile,
             'ENABLE-STREAK-PROTECTION',
@@ -62,7 +64,7 @@ export class EnsureStreakProtection extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'ENABLE-STREAK-PROTECTION',
-                    `Completed | isProtectionOn=true | remainingDays=${after.remainingDays ?? '?'} | status=${status}`,
+                    `Completed | streakProtectionEnabled=true | remainingDays=${after.remainingDays ?? 'null'} | status=${status}`,
                     'green'
                 )
             } else if (after === null) {

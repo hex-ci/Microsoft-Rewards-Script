@@ -17,7 +17,7 @@ export class ClaimBonusPoints extends Workers {
         this.bot.logger.info(
             this.bot.isMobile,
             'CLAIM-BONUS-POINTS',
-            `Starting ClaimBonusPoints | geo=${this.bot.userData.geoLocale} | oldBalance=${oldBalance}`
+            `Starting ClaimBonusPoints | geo=${this.bot.userData.geoLocale} | currentBalance=${oldBalance}`
         )
 
         try {
@@ -29,7 +29,7 @@ export class ClaimBonusPoints extends Workers {
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'CLAIM-BONUS-POINTS',
-                `Response | status=${status} | acknowledged=${acknowledged} | oldBalance=${oldBalance} | newBalance=${newBalance} | gainedPoints=${gainedPoints}`
+                `Response | status=${status} | acknowledged=${acknowledged} | previousBalance=${oldBalance} | currentBalance=${newBalance} | pointsGained=${gainedPoints}`
             )
 
             if (acknowledged) {
@@ -41,14 +41,14 @@ export class ClaimBonusPoints extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'CLAIM-BONUS-POINTS',
-                    `Completed ClaimBonusPoints | acknowledged=true${gainedPoints > 0 ? ` | gainedPoints=${gainedPoints}` : ''} | newBalance=${newBalance}`,
+                    `Completed ClaimBonusPoints | acknowledged=true | pointsGained=${gainedPoints} | currentBalance=${newBalance}`,
                     'green'
                 )
             } else {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'CLAIM-BONUS-POINTS',
-                    `Nothing claimed | status=${status} | balance unchanged at ${newBalance}`
+                    `Nothing claimed | status=${status} | pointsGained=0 | currentBalance=${newBalance}`
                 )
             }
 

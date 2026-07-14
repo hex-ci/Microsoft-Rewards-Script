@@ -26,7 +26,7 @@ export class SearchOnBing extends Workers {
         this.bot.logger.info(
             this.bot.isMobile,
             'SEARCH-ON-BING',
-            `Starting SearchOnBing | offerId=${offerId} | title="${promotion.title}" | currentPoints=${this.oldBalance}`
+            `Starting SearchOnBing | offerId=${offerId} | title="${promotion.title}" | currentBalance=${this.oldBalance}`
         )
 
         try {
@@ -47,14 +47,14 @@ export class SearchOnBing extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'SEARCH-ON-BING',
-                    `Completed SearchOnBing | offerId=${offerId} | startBalance=${this.oldBalance} | finalBalance=${this.bot.userData.currentPoints}`,
+                    `Completed SearchOnBing | offerId=${offerId} | pointsGained=${this.gainedPoints} | currentBalance=${this.bot.userData.currentPoints} | previousBalance=${this.oldBalance}`,
                     'green'
                 )
             } else {
                 this.bot.logger.warn(
                     this.bot.isMobile,
                     'SEARCH-ON-BING',
-                    `Failed SearchOnBing | offerId=${offerId} | startBalance=${this.oldBalance} | finalBalance=${this.bot.userData.currentPoints}`
+                    `Failed SearchOnBing | offerId=${offerId} | pointsGained=${this.gainedPoints} | currentBalance=${this.bot.userData.currentPoints} | previousBalance=${this.oldBalance}`
                 )
             }
         } catch (error) {
@@ -127,7 +127,7 @@ export class SearchOnBing extends Workers {
         this.bot.logger.debug(
             this.bot.isMobile,
             'SEARCH-ON-BING-SEARCH',
-            `Starting search loop | queriesCount=${queries.length} | targetPoints=${promotion.pointProgressMax} | oldBalance=${this.oldBalance}`
+            `Starting search loop | queriesCount=${queries.length} | targetPoints=${promotion.pointProgressMax} | currentBalance=${this.oldBalance}`
         )
 
         await this.ensureSearchReady(page)
@@ -163,7 +163,7 @@ export class SearchOnBing extends Workers {
                 this.bot.logger.debug(
                     this.bot.isMobile,
                     'SEARCH-ON-BING-SEARCH',
-                    `Progress check | query="${query}" | offerProgress=${offerProgress} | offerComplete=${offerComplete} | newBalance=${newBalance}`
+                    `Progress check | query="${query}" | offerProgress=${offerProgress} | offerComplete=${offerComplete} | currentBalance=${newBalance}`
                 )
 
                 if (offerComplete) {
@@ -171,7 +171,7 @@ export class SearchOnBing extends Workers {
                     this.bot.logger.info(
                         this.bot.isMobile,
                         'SEARCH-ON-BING-SEARCH',
-                        `SearchOnBing activity completed | query="${query}" | offerProgress=${offerProgress} | balanceGained=${this.gainedPoints}`,
+                        `SearchOnBing activity completed | pointsGained=${this.gainedPoints} | currentBalance=${newBalance} | query="${query}" | offerProgress=${offerProgress}`,
                         'green'
                     )
                     return
@@ -196,7 +196,7 @@ export class SearchOnBing extends Workers {
         this.bot.logger.warn(
             this.bot.isMobile,
             'SEARCH-ON-BING-SEARCH',
-            `Finished all queries without completing the activity | queriesTried=${queries.length} | offerId=${offerId} | oldBalance=${this.oldBalance} | finalBalance=${this.bot.userData.currentPoints}`
+            `Finished all queries without completing the activity | queriesTried=${queries.length} | offerId=${offerId} | pointsGained=${this.gainedPoints} | currentBalance=${this.bot.userData.currentPoints} | previousBalance=${this.oldBalance}`
         )
     }
 

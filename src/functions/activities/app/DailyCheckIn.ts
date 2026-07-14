@@ -23,7 +23,7 @@ export class DailyCheckIn extends Workers {
         this.bot.logger.info(
             this.bot.isMobile,
             'DAILY-CHECK-IN',
-            `Starting Daily Check-In | geo=${this.bot.userData.geoLocale} | currentPoints=${this.oldBalance}`
+            `Starting Daily Check-In | geo=${this.bot.userData.geoLocale} | currentBalance=${this.oldBalance}`
         )
 
         try {
@@ -41,7 +41,7 @@ export class DailyCheckIn extends Workers {
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'DAILY-CHECK-IN',
-                `Balance delta after Daily Check-In | type=103 | oldBalance=${this.oldBalance} | newBalance=${newBalance} | gainedPoints=${this.gainedPoints}`
+                `Balance delta after Daily Check-In | type=103 | previousBalance=${this.oldBalance} | currentBalance=${newBalance} | pointsGained=${this.gainedPoints}`
             )
 
             if (this.gainedPoints > 0) {
@@ -51,14 +51,14 @@ export class DailyCheckIn extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'DAILY-CHECK-IN',
-                    `Completed Daily Check-In | type=103 | gainedPoints=${this.gainedPoints} | oldBalance=${this.oldBalance} | newBalance=${newBalance}`,
+                    `Completed Daily Check-In | type=103 | pointsGained=${this.gainedPoints} | currentBalance=${newBalance}`,
                     'green'
                 )
             } else {
                 this.bot.logger.warn(
                     this.bot.isMobile,
                     'DAILY-CHECK-IN',
-                    `Daily Check-In completed but no points gained | type=103 | oldBalance=${this.oldBalance} | finalBalance=${newBalance}`
+                    `Daily Check-In completed but no points gained | type=103 | pointsGained=0 | currentBalance=${newBalance}`
                 )
             }
         } catch (error) {

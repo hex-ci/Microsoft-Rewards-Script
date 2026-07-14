@@ -65,10 +65,10 @@ ACCOUNT_1_PASSWORD=your_password
 ```
 
 > [!NOTE]
-> Add one `ACCOUNT_N_*` block per account, numbered from 1 with no gaps — the script stops at the first missing `ACCOUNT_N_EMAIL`. Optional per-account fields cover recovery email, locale (`ACCOUNT_N_GEO_LOCALE` defaults to `auto`, the locale of your Microsoft profile), language, proxy, and fingerprint persistence — see [`env.example`](env.example) for all of them.
+> Add one `ACCOUNT_N_*` block per account, numbered from 1 with no gaps - the script stops at the first missing `ACCOUNT_N_EMAIL`. Optional per-account fields cover recovery email, locale (`ACCOUNT_N_GEO_LOCALE` defaults to `auto`, the locale of your Microsoft profile), language, proxy, and fingerprint persistence - see [`env.example`](env.example) for all of them.
 
 > [!TIP]
-> For 2FA accounts, set `ACCOUNT_N_TOTP_SECRET` and the script will generate and enter the 6-digit code automatically. To get the secret: in your Microsoft Security settings open 'Manage how you sign in', add an Authenticator app, and when the QR code appears choose 'enter code manually' — use that code as the value in your `.env`.
+> For 2FA accounts, set `ACCOUNT_N_TOTP_SECRET` and the script will generate and enter the 6-digit code automatically. To get the secret: in your Microsoft Security settings open 'Manage how you sign in', add an Authenticator app, and when the QR code appears choose 'enter code manually' - use that code as the value in your `.env`.
 
 > [!WARNING]
 > You must rebuild your script after making any changes to the `.env`.
@@ -112,7 +112,7 @@ ACCOUNT_1_PASSWORD=your_password
 
 > [!TIP]
 > If a new image adds config options you're missing, a warning will appear in the container logs.
-> To update, delete `./config/config.json` and restart — a fresh one will be generated from the latest example, with your `compose.yaml` overrides re-applied.
+> To update, delete `./config/config.json` and restart - a fresh one will be generated from the latest example, with your `compose.yaml` overrides re-applied.
 
 - Start the container: `docker compose up -d`
 

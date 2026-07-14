@@ -436,11 +436,7 @@
     },
     {
         "title": "Prepare for the weather",
-        "queries": [
-            "Weather",
-            "weather tomorrow at my location",
-            "weather news"
-        ]
+        "queries": ["Weather", "weather tomorrow at my location", "weather news"]
     },
     {
         "title": "Protect what matters",
@@ -789,12 +785,7 @@
     },
     {
         "title": "Prepare for weather",
-        "queries": [
-            "Weather",
-            "weather tomorrow",
-            "weather news",
-            "local weather forecast"
-        ]
+        "queries": ["Weather", "weather tomorrow", "weather news", "local weather forecast"]
     },
     {
         "title": "Track Package",
@@ -848,12 +839,7 @@
     },
     {
         "title": "Up to date with election",
-        "queries": [
-            "US Elections",
-            "election news today",
-            "US election results",
-            "current election polls"
-        ]
+        "queries": ["US Elections", "election news today", "US election results", "current election polls"]
     },
     {
         "title": "Find your next adventure",
@@ -1007,12 +993,7 @@
     },
     {
         "title": "Serengeti adventure",
-        "queries": [
-            "Serengeti National Park",
-            "Serengeti safari",
-            "Serengeti animals",
-            "Serengeti migration"
-        ]
+        "queries": ["Serengeti National Park", "Serengeti safari", "Serengeti animals", "Serengeti migration"]
     },
     {
         "title": "Park with ease",

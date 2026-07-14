@@ -25,7 +25,7 @@ export class AppReward extends Workers {
         this.bot.logger.info(
             this.bot.isMobile,
             'APP-REWARD',
-            `Starting AppReward | offerId=${offerId} | country=${this.bot.userData.geoLocale} | oldBalance=${this.oldBalance}`
+            `Starting AppReward | offerId=${offerId} | country=${this.bot.userData.geoLocale} | currentBalance=${this.oldBalance}`
         )
 
         try {
@@ -79,7 +79,7 @@ export class AppReward extends Workers {
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'APP-REWARD',
-                `Balance delta after AppReward | offerId=${offerId} | oldBalance=${this.oldBalance} | newBalance=${newBalance} | gainedPoints=${this.gainedPoints}`
+                `Balance delta after AppReward | offerId=${offerId} | previousBalance=${this.oldBalance} | currentBalance=${newBalance} | pointsGained=${this.gainedPoints}`
             )
 
             if (this.gainedPoints > 0) {
@@ -89,14 +89,14 @@ export class AppReward extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'APP-REWARD',
-                    `Completed AppReward | offerId=${offerId} | gainedPoints=${this.gainedPoints} | oldBalance=${this.oldBalance} | newBalance=${newBalance}`,
+                    `Completed AppReward | offerId=${offerId} | pointsGained=${this.gainedPoints} | currentBalance=${newBalance}`,
                     'green'
                 )
             } else {
                 this.bot.logger.warn(
                     this.bot.isMobile,
                     'APP-REWARD',
-                    `Completed AppReward with no points | offerId=${offerId} | oldBalance=${this.oldBalance} | newBalance=${newBalance}`
+                    `Completed AppReward with no points | offerId=${offerId} | pointsGained=0 | currentBalance=${newBalance}`
                 )
             }
 
@@ -107,7 +107,7 @@ export class AppReward extends Workers {
             this.bot.logger.info(
                 this.bot.isMobile,
                 'APP-REWARD',
-                `Finished AppReward | offerId=${offerId} | finalBalance=${this.bot.userData.currentPoints}`
+                `Finished AppReward | offerId=${offerId} | currentBalance=${this.bot.userData.currentPoints}`
             )
         } catch (error) {
             this.bot.logger.error(

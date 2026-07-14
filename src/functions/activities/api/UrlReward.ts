@@ -45,7 +45,7 @@ export class UrlReward extends Workers {
         this.bot.logger.info(
             this.bot.isMobile,
             'URL-REWARD',
-            `Starting UrlReward | offerId=${offerId} | geo=${this.bot.userData.geoLocale} | oldBalance=${oldBalance}`
+            `Starting UrlReward | offerId=${offerId} | geo=${this.bot.userData.geoLocale} | currentBalance=${oldBalance}`
         )
 
         try {
@@ -65,7 +65,7 @@ export class UrlReward extends Workers {
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'URL-REWARD',
-                `Response | offerId=${offerId} | status=${status} | acknowledged=${acknowledged} | gainedPoints=${gainedPoints}`
+                `Response | offerId=${offerId} | status=${status} | acknowledged=${acknowledged} | pointsGained=${gainedPoints} | currentBalance=${newBalance}`
             )
 
             if (gainedPoints > 0) {
@@ -76,21 +76,21 @@ export class UrlReward extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'URL-REWARD',
-                    `Completed UrlReward | offerId=${offerId} | gainedPoints=${gainedPoints}${expectedPoints > 0 ? `/${expectedPoints}` : ''} | newBalance=${newBalance}${shortfall ? ' | WARNING: credited less than advertised' : ''}`,
+                    `Completed UrlReward | offerId=${offerId} | pointsGained=${gainedPoints} | currentBalance=${newBalance}${shortfall ? ' | WARNING: credited less than advertised' : ''}`,
                     'green'
                 )
             } else if (acknowledged && expectedPoints === 0) {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'URL-REWARD',
-                    `Completed UrlReward (no points by design) | offerId=${offerId} | acknowledged=true | balance=${newBalance}`,
+                    `Completed UrlReward (no points by design) | offerId=${offerId} | acknowledged=true | pointsGained=0 | currentBalance=${newBalance}`,
                     'green'
                 )
             } else {
                 this.bot.logger.warn(
                     this.bot.isMobile,
                     'URL-REWARD',
-                    `UrlReward credited no points | offerId=${offerId} | acknowledged=${acknowledged} | expected=${expectedPoints} | balance=${newBalance}`
+                    `UrlReward credited no points | offerId=${offerId} | acknowledged=${acknowledged} | expected=${expectedPoints} | pointsGained=0 | currentBalance=${newBalance}`
                 )
             }
 

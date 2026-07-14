@@ -60,7 +60,7 @@ export class ClaimReward extends Workers {
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'CLAIM-REWARD',
-                `Claim response | offerId=${offerId} | status=${status} | acknowledged=${acknowledged} | gainedPoints=${gained}`
+                `Claim response | offerId=${offerId} | status=${status} | acknowledged=${acknowledged} | pointsGained=${gained} | currentBalance=${newBalance}`
             )
 
             if (acknowledged) {
@@ -72,7 +72,7 @@ export class ClaimReward extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'CLAIM-REWARD',
-                    `Reward claimed | offerId=${offerId} | status=${status}${gained > 0 ? ` | gainedPoints=${gained}` : ''}`,
+                    `Reward claimed | offerId=${offerId} | status=${status} | pointsGained=${gained} | currentBalance=${newBalance}`,
                     'green'
                 )
             } else {

@@ -62,11 +62,7 @@ export function getCurrentContext(): ExecutionContext {
 }
 
 async function flushAllWebhooks(timeoutMs = 5000): Promise<void> {
-        await Promise.allSettled([
-        flushDiscordQueue(timeoutMs), 
-        flushNtfyQueue(timeoutMs),
-        flushTelegramQueue(timeoutMs)
-    ])
+    await Promise.allSettled([flushDiscordQueue(timeoutMs), flushNtfyQueue(timeoutMs), flushTelegramQueue(timeoutMs)])
     closeSessionStore()
 }
 
@@ -146,6 +142,10 @@ export class MicrosoftRewardsBot {
 
     get isMobile(): boolean {
         return getCurrentContext().isMobile
+    }
+
+    get currentAccountEmail(): string | null {
+        return getCurrentContext().account?.email || null
     }
 
     async initialize(): Promise<void> {
@@ -264,7 +264,7 @@ export class MicrosoftRewardsBot {
                 this.logger.info(
                     'main',
                     'RUN-END',
-                    `Completed all accounts | Accounts processed: ${allAccountStats.length} | Total points collected: +${totalCollectedPoints} | Old total: ${totalInitialPoints} → New total: ${totalFinalPoints} | Total runtime: ${totalDurationMinutes}min`,
+                    `Completed all accounts | accountsProcessed=${allAccountStats.length} | pointsGained=${totalCollectedPoints} | previousBalance=${totalInitialPoints} | currentBalance=${totalFinalPoints} | runtimeMinutes=${totalDurationMinutes}`,
                     'green'
                 )
 
@@ -365,7 +365,7 @@ export class MicrosoftRewardsBot {
                     this.logger.info(
                         'main',
                         'ACCOUNT-END',
-                        `Completed account: ${accountEmail} | Total: +${collectedPoints} | Old: ${accountInitialPoints} → New: ${accountFinalPoints} | Duration: ${durationSeconds}s`,
+                        `Completed account: ${accountEmail} | pointsGained=${collectedPoints} | previousBalance=${accountInitialPoints} | currentBalance=${accountFinalPoints} | durationSeconds=${durationSeconds}`,
                         'green'
                     )
                 } else {
@@ -408,7 +408,7 @@ export class MicrosoftRewardsBot {
             this.logger.info(
                 'main',
                 'RUN-END',
-                `Completed all accounts | Accounts processed: ${accountStats.length} | Total points collected: +${totalCollectedPoints} | Old total: ${totalInitialPoints} → New total: ${totalFinalPoints} | Total runtime: ${totalDurationMinutes}min`,
+                `Completed all accounts | accountsProcessed=${accountStats.length} | pointsGained=${totalCollectedPoints} | previousBalance=${totalInitialPoints} | currentBalance=${totalFinalPoints} | runtimeMinutes=${totalDurationMinutes}`,
                 'green'
             )
 
@@ -648,7 +648,11 @@ export class MicrosoftRewardsBot {
                 const finalPoints = await this.browser.func.getCurrentPoints()
                 const collectedPoints = finalPoints - initialPoints
 
-                this.logger.info('main', 'FLOW', `Collected: +${collectedPoints} | ${accountEmail}`)
+                this.logger.info(
+                    'main',
+                    'FLOW',
+                    `Points collected | pointsGained=${collectedPoints} | currentBalance=${finalPoints} | account=${accountEmail}`
+                )
 
                 return {
                     initialPoints,

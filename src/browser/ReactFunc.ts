@@ -49,6 +49,7 @@ export interface StreakState {
 export interface StreakProtectionState {
     isProtectionOn: boolean
     remainingDays: number | null
+    streakCounter: number | null
 }
 
 export interface AccountState {
@@ -82,11 +83,12 @@ export default class ReactFunc {
         const streaks = this.parseStreaks(combined)
         const streakProtection = this.parseStreakProtection(combined)
         const account = this.parseAccountData(combined)
+        const accountEmail = this.bot.currentAccountEmail
 
         this.bot.logger.info(
             this.bot.isMobile,
             'REACT-PARSE',
-            `Snapshot complete | offers=${offers.length} | reportable=${offers.filter(o => o.reportable).length} | streaks=${streaks.length} | protection=${streakProtection ? `on=${streakProtection.isProtectionOn},days=${streakProtection.remainingDays ?? '?'}` : 'n/a'} | level=${account.level}`
+            `Snapshot complete | offers=${offers.length} | reportable=${offers.filter(o => o.reportable).length} | streaks=${streaks.length} | streakProtectionEnabled=${streakProtection?.isProtectionOn ?? 'null'} | streakProtectionRemainingDays=${streakProtection?.remainingDays ?? 'null'} | streakCounter=${streakProtection?.streakCounter ?? 'null'} | level=${account.level} | account=${accountEmail ?? 'null'}`
         )
 
         return {
@@ -327,16 +329,18 @@ export default class ReactFunc {
             // The flag and remainingDays
             const withDays = carriers.find(o => 'remainingDays' in o && typeof o.remainingDays === 'number')
             const withFlag = carriers.find(o => typeof o.isProtectionOn === 'boolean')
+            const withStreakCounter = carriers.find(o => 'streakCounter' in o && typeof o.streakCounter === 'number')
 
             const state: StreakProtectionState = {
                 isProtectionOn: (withDays?.isProtectionOn ?? withFlag?.isProtectionOn) === true,
-                remainingDays: withDays ? (withDays.remainingDays as number) : null
+                remainingDays: withDays ? (withDays.remainingDays as number) : null,
+                streakCounter: withStreakCounter ? (withStreakCounter.streakCounter as number) : null
             }
 
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'REACT-PARSE',
-                `Parsed streak protection | on=${state.isProtectionOn} | remainingDays=${state.remainingDays ?? 'n/a'}`
+                `Parsed streak protection | enabled=${state.isProtectionOn} | remainingDays=${state.remainingDays ?? 'null'} | streakCounter=${state.streakCounter}`
             )
 
             return state

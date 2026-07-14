@@ -1,0 +1,65 @@
+name: Formatting
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+            - master
+    workflow_dispatch:
+
+jobs:
+    check:
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: npm
+
+            - name: Install dependencies
+              run: npm ci --ignore-scripts
+
+            - name: Check formatting
+              run: npm run format:check
+
+    create-formatting-pr:
+        if: github.event_name != 'pull_request'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@v4
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+                  cache: npm
+
+            - name: Install dependencies
+              run: npm ci --ignore-scripts
+
+            - name: Apply formatting
+              run: npm run format
+
+            - name: Create formatting pull request
+              uses: peter-evans/create-pull-request@v8
+              with:
+                  branch: chore/automated-formatting
+                  delete-branch: true
+                  commit-message: 'style: apply automated formatting'
+                  title: 'style: apply automated formatting'
+                  body: |
+                      Automated formatting changes produced by Prettier.
+
+                      This pull request is updated whenever formatting changes are required.

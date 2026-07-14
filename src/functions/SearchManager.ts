@@ -91,7 +91,11 @@ export class SearchManager {
             }
         })
 
-        this.bot.logger.info('main', 'SEARCH-MANAGER', `Bonus search summary | gained=+${gained}`)
+        this.bot.logger.info(
+            'main',
+            'SEARCH-MANAGER',
+            `Bonus search summary | pointsGained=${gained} | currentBalance=${this.bot.userData.currentPoints}`
+        )
         return gained
     }
 }

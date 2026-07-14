@@ -543,7 +543,7 @@ export class Workers {
         this.bot.logger.info(
             this.bot.isMobile,
             'PUNCHCARD',
-            `Quest "${title}" ${remaining === 0 ? 'COMPLETE' : 'in progress'} | reported=${reported}${remaining ? ` | remaining=${remaining}` : ''} | gainedPoints=${gained}${parent.pointProgressMax > 0 ? `/${parent.pointProgressMax}` : ''}`,
+            `Quest "${title}" ${remaining === 0 ? 'COMPLETE' : 'in progress'} | reported=${reported}${remaining ? ` | remaining=${remaining}` : ''} | pointsGained=${gained} | currentBalance=${this.bot.userData.currentPoints}${parent.pointProgressMax > 0 ? ` | targetPoints=${parent.pointProgressMax}` : ''}`,
             gained > 0 ? 'green' : undefined
         )
     }
@@ -587,7 +587,7 @@ export class Workers {
             this.bot.logger.info(
                 this.bot.isMobile,
                 'PUNCHCARD',
-                `Reported child | offerId=${offerId} | status=${status} | acknowledged=${acknowledged}${gained > 0 ? ` | gainedPoints=${gained}` : ''}`,
+                `Reported child | offerId=${offerId} | status=${status} | acknowledged=${acknowledged} | pointsGained=${gained} | currentBalance=${newBalance}`,
                 gained > 0 || acknowledged ? 'green' : undefined
             )
         } catch (error) {

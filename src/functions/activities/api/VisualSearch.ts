@@ -22,7 +22,7 @@ export class VisualSearch extends Workers {
             this.bot.logger.info(
                 this.bot.isMobile,
                 'VISUAL-SEARCH',
-                `Already completed today | streak day ${streak.completedDays}/${streak.totalDays}`,
+                `Already completed today | visualSearchStreak=${streak.completedDays}/${streak.totalDays}`,
                 'green'
             )
             return 0
@@ -168,7 +168,7 @@ export class VisualSearch extends Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'VISUAL-SEARCH',
-                    `Daily visual search done | +${gained} | "${visual.query}" | balance=${res.balance}`,
+                    `Daily visual search done | pointsGained=${gained} | currentBalance=${res.balance} | query="${visual.query}"`,
                     'green'
                 )
                 return gained

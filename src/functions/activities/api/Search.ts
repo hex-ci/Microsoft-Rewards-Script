@@ -10,7 +10,7 @@ export class Search extends Workers {
         const startBalance = Number(this.bot.userData.currentPoints ?? 0)
         let totalGained = 0
 
-        this.bot.logger.info(isMobile, 'SEARCH-BING', `Starting Bing searches | currentPoints=${startBalance}`)
+        this.bot.logger.info(isMobile, 'SEARCH-BING', `Starting Bing searches | currentBalance=${startBalance}`)
 
         try {
             const missing = this.bot.browser.func.missingSearchPoints(
@@ -76,7 +76,7 @@ export class Search extends Workers {
                     this.bot.logger.info(
                         isMobile,
                         'SEARCH-BING',
-                        `gainedPoints=${gained} | query="${query}" | balance=${res.balance} | searchPts=${cap}`,
+                        `pointsGained=${gained} | currentBalance=${res.balance} | query="${query}" | searchPts=${cap}`,
                         'green'
                     )
                 } else {
@@ -118,7 +118,7 @@ export class Search extends Workers {
             this.bot.logger.info(
                 isMobile,
                 'SEARCH-BING',
-                `Completed Bing searches | startBalance=${startBalance} | gained=${totalGained} | searches=${performed}`
+                `Completed Bing searches | pointsGained=${totalGained} | currentBalance=${this.bot.userData.currentPoints} | previousBalance=${startBalance} | searches=${performed}`
             )
             return totalGained
         } catch (error) {
@@ -179,7 +179,7 @@ export class Search extends Workers {
                     this.bot.logger.info(
                         isMobile,
                         tracker.context,
-                        `+${gained} | query="${query}" | ${tracker.progress()}`,
+                        `pointsGained=${gained} | currentBalance=${this.bot.userData.currentPoints} | query="${query}" | ${tracker.progress()}`,
                         'green'
                     )
                 } else {
@@ -220,7 +220,7 @@ export class Search extends Workers {
         this.bot.logger.info(
             isMobile,
             tracker.context,
-            `Bonus farming ${done ? 'complete' : 'stopped'} (${reason}) | ${tracker.progress()} | searches=${performed} | gained=+${totalGained}`,
+            `Bonus farming ${done ? 'complete' : 'stopped'} (${reason}) | pointsGained=${totalGained} | currentBalance=${this.bot.userData.currentPoints} | ${tracker.progress()} | searches=${performed}`,
             done || totalGained > 0 ? 'green' : undefined
         )
         return totalGained
