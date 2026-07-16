@@ -159,10 +159,20 @@ fi
 
 # Start the actual script
 echo "[$(date)] [run_daily.sh] Starting script..."
-if npm start; then
-    echo "[$(date)] [run_daily.sh] Script completed successfully."
+if [ "${API_MODE:-false}" = "true" ]; then
+    # API-integrated mode: delegate to the API server so the dashboard has full
+    # visibility and control.  trigger.js calls POST /start and waits for idle.
+    if node scripts/api/trigger.js; then
+        echo "[$(date)] [run_daily.sh] Script completed successfully (via API)."
+    else
+        echo "[$(date)] [run_daily.sh] ERROR: Script failed (via API)!" >&2
+    fi
 else
-    echo "[$(date)] [run_daily.sh] ERROR: Script failed!" >&2
+    if npm start; then
+        echo "[$(date)] [run_daily.sh] Script completed successfully."
+    else
+        echo "[$(date)] [run_daily.sh] ERROR: Script failed!" >&2
+    fi
 fi
 
 echo "[$(date)] [run_daily.sh] Script finished"

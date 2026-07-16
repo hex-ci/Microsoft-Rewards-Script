@@ -13,9 +13,12 @@ services:
             # Load account credentials from the .env file (ACCOUNT_1_EMAIL, ACCOUNT_1_PASSWORD, etc.)
             - path: .env
         environment:
-            # Scheduling
+            # ── Scheduler ──────────────────────────────────────
             TZ: 'America/Toronto'
             NODE_ENV: 'production'
+            # CRON_SCHEDULE is the *initial* default. It will run as default unless changed by the API
+            # API schedule changes are saved to ./config/schedule.json, delete
+            # that file to revert to the base CRON_SCHEDULE again.
             CRON_SCHEDULE: '0 7 * * *' # use crontab.guru to customize your schedule
             RUN_ON_START: 'true' # run script immediately on container start
             SKIP_RANDOM_SLEEP: 'false'
@@ -23,15 +26,30 @@ services:
             #MAX_SLEEP_MINUTES: "50"
             #STUCK_PROCESS_TIMEOUT_HOURS: "8"
 
-            # Configuration
+            # ── API mode ──────────────────────────────────────
+            # Set API_MODE=true to run the API server for additional control options
+            #API_MODE: 'true'
+            #API_TOKEN: '${API_TOKEN}'             # required for API mode, see example.env
+            # set the API_ALLOW=true to enable API commands to make changes to the script configuration, off by default
+            #API_ALLOW_SCHEDULE_WRITE: 'true'
+            #API_ALLOW_ENV_OVERRIDES: 'true'
+            #API_ALLOW_CONFIG_REVEAL: 'true'
+            #API_ALLOW_CONFIG_WRITE: 'true'
+
+            #  ── Configuration ──────────────────────────────────────
             # Uncomment to override defaults, a full list of configuration options are in the README.
             #CONFIG_CLUSTERS: '1'
             #... add additional configuration overrides as needed
 
+        # ── API mode port mapping ──────────────────────────────────────
+        # Uncomment when API_MODE=true
+        #ports:
+        #    - '3010:3010'
+
         healthcheck:
-            test: ['CMD', 'sh', '-c', 'pgrep cron > /dev/null || exit 1']
+            test: ['CMD-SHELL', 'pgrep -x node >/dev/null 2>&1 || pgrep -x cron >/dev/null 2>&1']
             interval: 60s
-            timeout: 10s
+            timeout: 5s
             retries: 3
             start_period: 30s
 

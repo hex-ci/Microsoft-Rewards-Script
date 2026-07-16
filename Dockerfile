@@ -101,10 +101,13 @@ COPY config.example.json ./config.example.json
 
 # Copy runtime scripts with proper permissions from the start
 COPY --chmod=755 scripts/docker/run_daily.sh ./scripts/docker/run_daily.sh
+COPY --chmod=755 scripts/docker/healthcheck.sh ./scripts/docker/healthcheck.sh
+COPY --chmod=755 scripts/api/ ./scripts/api/
+COPY --chmod=644 scripts/package.json ./scripts/package.json
 COPY --chmod=644 src/crontab.template /etc/cron.d/microsoft-rewards-cron.template
 COPY --chmod=755 scripts/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 # Entrypoint handles TZ, accounts/config generation, initial run toggle,
-# cron templating & launch
+# cron templating & launch, or API server startup when API_MODE=true
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["sh", "-c", "echo 'Container started; cron is running.'"]
