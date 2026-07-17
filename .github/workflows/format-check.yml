@@ -15,6 +15,9 @@ concurrency:
 
 permissions:
     contents: read
+    checks: write
+    issues: write
+    pull-requests: write
 
 jobs:
     check-formatting:
@@ -35,16 +38,19 @@ jobs:
             - name: Install dependencies
               run: npm ci --ignore-scripts
 
-            - name: Check formatting and show suggested changes
+            - name: Apply formatting and collect changes
+              id: formatting
               shell: bash
               run: |
                   npm run format
 
                   if git diff --quiet; then
-                    echo "Formatting is correct."
+                    echo "changed=false" >> "$GITHUB_OUTPUT"
+                    echo "Formatting is correct." >> "$GITHUB_STEP_SUMMARY"
                     exit 0
                   fi
 
+                  echo "changed=true" >> "$GITHUB_OUTPUT"
                   git diff --no-color > /tmp/formatting.diff
                   diff_lines=$(wc -l < /tmp/formatting.diff)
 
@@ -69,5 +75,33 @@ jobs:
                     fi
                   } >> "$GITHUB_STEP_SUMMARY"
 
+            - name: Add inline formatting suggestions
+              if: >
+                  steps.formatting.outputs.changed == 'true' &&
+                  github.event_name == 'pull_request' &&
+                  github.event.pull_request.head.repo.full_name == github.repository
+              uses: reviewdog/action-suggester@v1.24.3
+              with:
+                  tool_name: formatter
+                  level: error
+                  filter_mode: diff_context
+
+            - name: Explain fork pull request limitation
+              if: >
+                  steps.formatting.outputs.changed == 'true' &&
+                  github.event_name == 'pull_request' &&
+                  github.event.pull_request.head.repo.full_name != github.repository
+              shell: bash
+              run: |
+                  {
+                    echo
+                    echo "> Inline suggestions were skipped because workflows from fork pull requests receive a read-only token."
+                    echo "> The complete formatting diff is still shown above."
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Fail formatting check
+              if: steps.formatting.outputs.changed == 'true'
+              shell: bash
+              run: |
                   echo "Formatting changes are required. Run 'npm run format' locally."
                   exit 1

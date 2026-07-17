@@ -3,8 +3,8 @@ name: Formatting Repair
 on:
     push:
         branches:
-            - main
-            - master
+            - v4
+            - v3
     workflow_dispatch:
 
 concurrency:
@@ -39,18 +39,44 @@ jobs:
             - name: Apply formatting
               run: npm run format
 
+            - name: Detect formatting changes
+              id: formatting
+              shell: bash
+              run: |
+                  if git diff --quiet; then
+                    echo "changed=false" >> "$GITHUB_OUTPUT"
+                    echo "No formatting repair is required." >> "$GITHUB_STEP_SUMMARY"
+                  else
+                    echo "changed=true" >> "$GITHUB_OUTPUT"
+                    echo "Formatting changes were found; creating or updating the repair pull request." >> "$GITHUB_STEP_SUMMARY"
+                  fi
+
             - name: Create or update formatting pull request
+              id: create_pr
+              if: steps.formatting.outputs.changed == 'true'
               uses: peter-evans/create-pull-request@v8.1.1
               with:
                   token: ${{ secrets.GITHUB_TOKEN }}
                   base: ${{ github.ref_name }}
-                  branch: chore/automated-formatting
+                  branch: chore/automated-formatting-${{ github.ref_name }}
                   delete-branch: true
                   commit-message: 'style: apply automated formatting'
                   committer: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
                   author: 'github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
                   title: 'style: apply automated formatting'
                   body: |
-                      Automated formatting repair generated after changes reached the default branch.
+                      Automated formatting repair generated after changes reached `${{ github.ref_name }}`.
 
                       This pull request only contains changes produced by `npm run format`.
+
+            - name: Report formatting pull request
+              if: steps.create_pr.outputs.pull-request-url != ''
+              shell: bash
+              env:
+                  PULL_REQUEST_URL: ${{ steps.create_pr.outputs.pull-request-url }}
+                  PULL_REQUEST_OPERATION: ${{ steps.create_pr.outputs.pull-request-operation }}
+              run: |
+                  {
+                    echo
+                    echo "Formatting pull request $PULL_REQUEST_OPERATION: $PULL_REQUEST_URL"
+                  } >> "$GITHUB_STEP_SUMMARY"

@@ -8,6 +8,7 @@ import { ProcessManager } from './processManager.js'
 import { buildExcludedAccountsEnv, buildSingleAccountEnv, loadAccounts, mergeAccountStats } from './accounts.js'
 import { validateConfig, deepMerge, readConfig, writeConfigAtomic } from './configEditor.js'
 import { readSchedule, writeSchedule } from './scheduleStore.js'
+import { deleteStoredSessions, listStoredSessions } from './sessionStore.js'
 import { resolveRunCommand } from './runCommand.js'
 import {
     log,
@@ -71,7 +72,7 @@ const startedAt = Date.now()
 // Forward bot stdout/stderr to the API server's own output streams so that
 // container logs (docker logs) continue to show the bot's output regardless
 // of which mode started the run. Controller messages (run start/stop lifecycle
-// events from ProcessManager) are included — they are low-volume and useful.
+// events from ProcessManager) are included - they are low-volume and useful.
 pm.on('log', entry => {
     const line = (entry.raw ?? entry.message ?? '') + '\n'
     if (entry.source === 'stderr') process.stderr.write(line)
@@ -98,7 +99,7 @@ function toHistoryRecord(entry) {
 function applyCors(res) {
     res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN)
     res.setHeader('Vary', 'Origin')
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, OPTIONS')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-API-Key')
     res.setHeader('Access-Control-Max-Age', '86400')
 }
@@ -249,6 +250,7 @@ const requestHandler = async (req, res) => {
                     'GET /errors',
                     'GET /history',
                     'GET /accounts',
+                    'GET /sessions',
                     'GET /diagnostics',
                     'GET /events',
                     'GET /config',
@@ -257,6 +259,7 @@ const requestHandler = async (req, res) => {
                     'POST /stop',
                     'POST /restart',
                     'POST /shutdown',
+                    'DELETE /sessions/:email',
                     'PUT|PATCH /config',
                     'PUT|PATCH /schedule'
                 ]
@@ -315,6 +318,64 @@ const requestHandler = async (req, res) => {
         if (method === 'GET' && pathname === '/accounts') {
             const accounts = mergeAccountStats(loadAccounts(), pm.getHistory().map(toHistoryRecord))
             return sendJson(res, 200, { accounts, count: accounts.length })
+        }
+
+        // session list
+        if (method === 'GET' && pathname === '/sessions') {
+            const loaded = loadConfigSafe(projectRoot)
+            if (!loaded) return sendJson(res, 404, { error: 'config.json not found' })
+            if (loaded.data == null)
+                return sendJson(res, 500, { error: 'config.json is invalid', detail: loaded.error })
+
+            const sessionPath = typeof loaded.data.sessionPath === 'string' ? loaded.data.sessionPath : 'sessions'
+            return sendJson(res, 200, listStoredSessions(projectRoot, sessionPath))
+        }
+
+        // account-specific session delete; intentionally no delete-all route
+        if (method === 'DELETE' && pathname === '/sessions') {
+            return sendJson(res, 400, {
+                error: 'An account email is required. Use DELETE /sessions/:email.',
+                code: 'EMAIL_REQUIRED'
+            })
+        }
+
+        if (method === 'DELETE' && pathname.startsWith('/sessions/')) {
+            if (pm.getStatus().state !== 'idle') {
+                return sendJson(res, 409, {
+                    error: 'Cannot delete sessions while a bot run is active. Stop the run first.',
+                    code: 'RUN_ACTIVE'
+                })
+            }
+
+            let email
+            try {
+                email = decodeURIComponent(pathname.slice('/sessions/'.length)).trim()
+            } catch {
+                return sendJson(res, 400, { error: 'The session email path is not valid URL encoding.' })
+            }
+            if (!email || email.length > 320 || !email.includes('@') || /[\u0000-\u001F\u007F]/.test(email)) {
+                return sendJson(res, 400, {
+                    error: 'A valid account email is required in DELETE /sessions/:email.',
+                    code: 'INVALID_EMAIL'
+                })
+            }
+
+            const loaded = loadConfigSafe(projectRoot)
+            if (!loaded) return sendJson(res, 404, { error: 'config.json not found' })
+            if (loaded.data == null)
+                return sendJson(res, 500, { error: 'config.json is invalid', detail: loaded.error })
+
+            const sessionPath = typeof loaded.data.sessionPath === 'string' ? loaded.data.sessionPath : 'sessions'
+            const result = deleteStoredSessions(projectRoot, sessionPath, email)
+            if (!result.found) {
+                return sendJson(res, 404, {
+                    error: `No stored sessions found for ${email}.`,
+                    code: 'SESSION_NOT_FOUND'
+                })
+            }
+
+            pm.note('info', `Deleted ${result.removed} stored session row(s) for ${result.email} via API.`)
+            return sendJson(res, 200, { deleted: true, ...result })
         }
 
         // diag list
@@ -615,7 +676,7 @@ server.listen(PORT, HOST, () => {
     )
     log(
         'INFO',
-        `Stateless: writes nothing to disk except schedule.json when enabled | config writes: ${ALLOW_CONFIG_WRITE ? 'on' : 'off'} | schedule writes: ${ALLOW_SCHEDULE_WRITE ? 'on' : 'off'}`
+        `Runtime state: memory-only | config writes: ${ALLOW_CONFIG_WRITE ? 'on' : 'off'} | schedule writes: ${ALLOW_SCHEDULE_WRITE ? 'on' : 'off'} | session deletion: account-scoped`
     )
     if (!TOKEN) {
         const loopback = HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1'

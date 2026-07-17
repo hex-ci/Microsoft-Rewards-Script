@@ -643,7 +643,7 @@ export class MicrosoftRewardsBot {
                     }`
                 )
 
-                if (this.config.workers.doClaimBonusPoints) await this.workers.doClaimBonusPoints(data)
+                if (this.config.workers.doClaimBonusPoints) await this.workers.doClaimBonusPoints()
 
                 const finalPoints = await this.browser.func.getCurrentPoints()
                 const collectedPoints = finalPoints - initialPoints

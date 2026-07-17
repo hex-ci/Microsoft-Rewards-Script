@@ -12,15 +12,20 @@ The API can:
 - stream structured logs over Server-Sent Events (SSE);
 - return recent errors, in-memory run history, configured account summaries,
   and diagnostic captures;
-- read `config.json` and, when explicitly enabled, validate and update it.
+- list stored session metadata and delete the mobile/desktop sessions belonging
+  to one account;
+- read `config.json` and, when explicitly enabled, validate and update it;
+- read the effective cron schedule and, in Docker API mode, persist and apply
+  schedule changes without restarting the container.
 
 It uses only Node.js built-ins and follows the same ESM `.js` convention as the
 other scripts in the project.
 
 ## Architecture and persistence
 
-The API is designed as a stateless middleman between the bot and a dashboard.
-It launches the normal bot command as a child process and parses its output.
+The API is designed as a lightweight runtime controller between the bot and a
+dashboard. It launches the normal bot command as a child process and parses its
+output without maintaining a runtime database.
 
 ```text
 bot repository                               dashboard or other client
@@ -41,14 +46,22 @@ restarts:
 - completed run history;
 - account statistics calculated from that history.
 
-The API does not create its own database or data directory. The only supported
-write operation is updating `config.json`, and that is disabled by default. When
-config writing is enabled, the previous file is copied to `config.json.bak` on a
-best-effort basis before the replacement is written.
+The API does not create its own database. Config and schedule writes are both
+disabled by default and require separate opt-in environment variables:
 
-Scheduling intentionally belongs to the dashboard or another external scheduler.
-A scheduler can persist its own schedule and call `POST /start` when a run is due;
-the control API itself does not create or store schedule files.
+- `PUT` or `PATCH /config` updates `config.json`. The previous file is copied to
+  `config.json.bak` on a best-effort basis before replacement.
+- `PUT` or `PATCH /schedule` writes `config/schedule.json` atomically and applies
+  the cron change immediately. The file lives in the existing Docker `./config`
+  volume, so it survives container restarts and takes precedence over
+  `CRON_SCHEDULE`.
+- `DELETE /sessions/:email` removes only the matching account rows from the
+  bot's existing `sessions.db`. The API never exposes stored cookies or
+  fingerprint contents and has no delete-all session route.
+
+All live logs, parsed run state, errors, history, and calculated account
+statistics remain memory-only. A dashboard can store those results separately
+when durable history is needed.
 
 ## Requirements
 
@@ -93,12 +106,16 @@ A successful response looks like:
 {
     "ok": true,
     "name": "microsoft-rewards-script",
-    "version": "4.0.0",
+    "version": "4.0.3",
     "state": "idle",
     "uptimeSec": 12,
     "authRequired": false
 }
 ```
+
+`stateless: true` means live controller data is kept in memory rather than an
+API database. It does not mean the explicitly enabled config/schedule writes or
+account-scoped session deletion are unavailable.
 
 The exact package name and version are read from the repository's
 `package.json`.
@@ -236,31 +253,36 @@ server itself remains dependency-free.
 
 ### Read endpoints
 
-| Method | Path                            | Purpose                                                          |
-| ------ | ------------------------------- | ---------------------------------------------------------------- |
-| `GET`  | `/`                             | API name, version, authentication state, and endpoint index.     |
-| `GET`  | `/health`                       | Lightweight liveness and process-state check.                    |
-| `GET`  | `/status`                       | Complete process and parsed run state.                           |
-| `GET`  | `/points`                       | Simplified live point totals for dashboard polling.              |
-| `GET`  | `/logs`                         | Buffered structured logs.                                        |
-| `GET`  | `/errors`                       | Recent warning/error logs and per-account failures.              |
-| `GET`  | `/history`                      | Completed runs retained by this API process.                     |
-| `GET`  | `/accounts`                     | Safe summaries of configured accounts and recent run statistics. |
-| `GET`  | `/diagnostics`                  | List available error-capture directories.                        |
-| `GET`  | `/diagnostics/<capture>/<file>` | Download or view one diagnostic artifact.                        |
-| `GET`  | `/config`                       | Read `config.json`, redacted by default.                         |
-| `GET`  | `/events`                       | SSE stream containing live logs and status updates.              |
+| Method | Path                            | Purpose                                                           |
+| ------ | ------------------------------- | ----------------------------------------------------------------- |
+| `GET`  | `/`                             | API name, version, authentication state, and endpoint index.      |
+| `GET`  | `/health`                       | Lightweight liveness and process-state check.                     |
+| `GET`  | `/status`                       | Complete process and parsed run state.                            |
+| `GET`  | `/points`                       | Simplified live point totals for dashboard polling.               |
+| `GET`  | `/logs`                         | Buffered structured logs.                                         |
+| `GET`  | `/errors`                       | Recent warning/error logs and per-account failures.               |
+| `GET`  | `/history`                      | Completed runs retained by this API process.                      |
+| `GET`  | `/accounts`                     | Safe summaries of configured accounts and recent run statistics.  |
+| `GET`  | `/sessions`                     | Stored account/platform session metadata without secret contents. |
+| `GET`  | `/diagnostics`                  | List available error-capture directories.                         |
+| `GET`  | `/diagnostics/<capture>/<file>` | Download or view one diagnostic artifact.                         |
+| `GET`  | `/config`                       | Read `config.json`, redacted by default.                          |
+| `GET`  | `/schedule`                     | Read the effective cron schedule and its source.                  |
+| `GET`  | `/events`                       | SSE stream containing live logs and status updates.               |
 
 ### Control and write endpoints
 
-| Method  | Path        | Purpose                                               |
-| ------- | ----------- | ----------------------------------------------------- |
-| `POST`  | `/start`    | Start a bot run.                                      |
-| `POST`  | `/stop`     | Request graceful or forced process termination.       |
-| `POST`  | `/restart`  | Stop an active run, then start a new one.             |
-| `POST`  | `/shutdown` | Stop the bot if needed and terminate the API process. |
-| `PUT`   | `/config`   | Replace the complete config after validation.         |
-| `PATCH` | `/config`   | Deep-merge a partial config after validation.         |
+| Method   | Path               | Purpose                                                 |
+| -------- | ------------------ | ------------------------------------------------------- |
+| `POST`   | `/start`           | Start a bot run.                                        |
+| `POST`   | `/stop`            | Request graceful or forced process termination.         |
+| `POST`   | `/restart`         | Stop an active run, then start a new one.               |
+| `POST`   | `/shutdown`        | Stop the bot if needed and terminate the API process.   |
+| `DELETE` | `/sessions/:email` | Delete only one account's mobile and desktop sessions.  |
+| `PUT`    | `/config`          | Replace the complete config after validation.           |
+| `PATCH`  | `/config`          | Deep-merge a partial config after validation.           |
+| `PUT`    | `/schedule`        | Persist and immediately apply supplied schedule fields. |
+| `PATCH`  | `/schedule`        | Persist and immediately apply supplied schedule fields. |
 
 ## Reading API state
 
@@ -286,15 +308,33 @@ console.log(data)
 ```json
 {
     "name": "microsoft-rewards-script",
-    "version": "4.0.0",
+    "version": "4.0.3",
     "message": "Control API",
     "authRequired": true,
     "stateless": true,
-    "endpoints": ["GET /health", "GET /status", "GET /points", "POST /start"]
+    "endpoints": [
+        "GET /health",
+        "GET /status",
+        "GET /points",
+        "GET /logs",
+        "GET /errors",
+        "GET /history",
+        "GET /accounts",
+        "GET /sessions",
+        "GET /diagnostics",
+        "GET /events",
+        "GET /config",
+        "GET /schedule",
+        "POST /start",
+        "POST /stop",
+        "POST /restart",
+        "POST /shutdown",
+        "DELETE /sessions/:email",
+        "PUT|PATCH /config",
+        "PUT|PATCH /schedule"
+    ]
 }
 ```
-
-The actual `endpoints` array contains every supported route.
 
 ### `GET /health`
 
@@ -347,7 +387,7 @@ Representative response:
 ```jsonc
 {
     "name": "microsoft-rewards-script",
-    "version": "4.0.0",
+    "version": "4.0.3",
     "state": "running",
     "pid": 18420,
     "startedAt": "2026-07-14T09:30:00.000Z",
@@ -357,7 +397,7 @@ Representative response:
     "logBufferSize": 2000,
     "latestLogId": 418,
     "run": {
-        "version": "4.0.0",
+        "version": "4.0.3",
         "clusters": 1,
         "accountsTotal": 2,
         "accountsSeen": 1,
@@ -479,7 +519,7 @@ Query parameters:
 
 Examples:
 
-**cURL — last 50 entries**
+**cURL - last 50 entries**
 
 ```bash
 curl --request GET \
@@ -487,7 +527,7 @@ curl --request GET \
   --header 'Authorization: Bearer YOUR_API_TOKEN'
 ```
 
-**Axios — last 50 entries**
+**Axios - last 50 entries**
 
 ```js
 const { data } = await api.get('/logs', {
@@ -626,7 +666,7 @@ console.log(data.runs)
                 "signal": null,
                 "at": "2026-07-14T09:36:12.000Z"
             },
-            "version": "4.0.0",
+            "version": "4.0.3",
             "collected": 312,
             "accounts": [
                 {
@@ -712,6 +752,107 @@ The `runs`, `totalCollected`, `successStreak`, and `last*` fields are calculated
 from this API process's in-memory history and therefore reset after an API
 restart.
 
+## Session management
+
+The session endpoints use the `sessions.db` located under the configured
+`sessionPath`. They require the normal API token whenever `API_TOKEN` is set.
+
+Session contents are authentication material. The API deliberately returns only
+safe metadata such as account, platform, update time, cookie count, and whether
+storage/fingerprint data exists. Cookie values, storage state, and fingerprint
+contents are never returned.
+
+### `GET /sessions`
+
+Lists every stored mobile and desktop session.
+
+**cURL**
+
+```bash
+curl --request GET \
+  --url http://127.0.0.1:3010/sessions \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'
+```
+
+**Axios**
+
+```js
+const { data } = await api.get('/sessions')
+console.log(data.sessions)
+```
+
+```json
+{
+    "databaseExists": true,
+    "sessions": [
+        {
+            "email": "user@example.com",
+            "platform": "desktop",
+            "updatedAt": "2026-07-17T08:30:00.000Z",
+            "hasStorageState": true,
+            "hasFingerprint": true,
+            "cookieCount": 18
+        },
+        {
+            "email": "user@example.com",
+            "platform": "mobile",
+            "updatedAt": "2026-07-17T08:31:00.000Z",
+            "hasStorageState": true,
+            "hasFingerprint": true,
+            "cookieCount": 21
+        }
+    ],
+    "count": 2,
+    "accounts": 1
+}
+```
+
+When no session database exists, the endpoint still returns `200 OK` with
+`databaseExists: false`, empty `sessions`, and zero counts. A `cookieCount` of
+`null` means the stored JSON could not be parsed; no cookie data is disclosed.
+
+### `DELETE /sessions/:email`
+
+Deletes all stored platforms for one case-insensitive, exact account email. The
+email must be URL-encoded as one path value. There is intentionally no API
+endpoint for deleting all sessions.
+
+The bot must be idle. Deleting while a run is starting, running, or stopping
+returns `409 Conflict`, because an active process could otherwise write the
+session back after deletion.
+
+**cURL**
+
+```bash
+curl --request DELETE \
+  --url http://127.0.0.1:3010/sessions/user%40example.com \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'
+```
+
+**Axios**
+
+```js
+const email = 'user@example.com'
+const { data } = await api.delete(`/sessions/${encodeURIComponent(email)}`)
+console.log(data)
+```
+
+```json
+{
+    "deleted": true,
+    "found": true,
+    "removed": 2,
+    "email": "user@example.com",
+    "platforms": ["desktop", "mobile"]
+}
+```
+
+If the account has no stored sessions, the endpoint returns `404 Not Found`
+with code `SESSION_NOT_FOUND`. `DELETE /sessions` without an email and invalid
+email paths return `400 Bad Request`. The endpoint accepts no JSON body.
+
+## Reading diagnostics
+
 ### `GET /diagnostics`
 
 Lists diagnostic capture directories found under `API_DIAGNOSTICS_DIR`.
@@ -756,7 +897,7 @@ Each capture can expose only these filenames:
 
 Examples:
 
-**cURL — download a screenshot**
+**cURL - download a screenshot**
 
 ```bash
 curl --request GET \
@@ -765,7 +906,7 @@ curl --request GET \
   --output screenshot.png
 ```
 
-**Axios — download a screenshot in Node.js**
+**Axios - download a screenshot in Node.js**
 
 ```js
 import { writeFile } from 'node:fs/promises'
@@ -1357,7 +1498,7 @@ curl --request PUT \
   --data-binary @config.json
 ```
 
-**Axios — Node.js**
+**Axios - Node.js**
 
 ```js
 import { readFile } from 'node:fs/promises'
@@ -1384,6 +1525,149 @@ Validation failures return `422 Unprocessable Entity`:
 ```
 
 When writes are disabled, `PUT` and `PATCH` return `403 Forbidden`.
+
+## Reading and editing the schedule
+
+The schedule endpoints expose the cron schedule used by the Docker-integrated
+API mode. Reading is always available. Writing must be explicitly enabled and
+is intended for the Docker image, where the cron template and `crontab` command
+are present.
+
+The effective schedule comes from one of two sources:
+
+1. `config/schedule.json`, after a schedule has been written through the API;
+2. `CRON_SCHEDULE`, when no persisted override exists.
+
+A persisted override takes precedence over `CRON_SCHEDULE` across container
+restarts because the file is stored in the existing `./config` volume.
+
+### `GET /schedule`
+
+Returns the effective schedule and whether this API instance permits changes.
+
+**cURL**
+
+```bash
+curl --request GET \
+  --url http://127.0.0.1:3010/schedule \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'
+```
+
+**Axios**
+
+```js
+const { data } = await api.get('/schedule')
+console.log(data)
+```
+
+Response when the schedule still comes from the container environment:
+
+```json
+{
+    "enabled": true,
+    "cron": "0 7 * * *",
+    "skipIfRunning": true,
+    "excludedAccountIndexes": [],
+    "updatedAt": null,
+    "timezone": "Europe/Amsterdam",
+    "source": "env",
+    "writable": false
+}
+```
+
+Fields:
+
+- `enabled`: whether a cron job should be installed;
+- `cron`: the effective five-field cron expression, or `null` when none exists;
+- `skipIfRunning`: stored scheduler preference. The integrated Docker trigger
+  already exits cleanly when another run is active;
+- `excludedAccountIndexes`: original `ACCOUNT_<N>` slots omitted from scheduled
+  runs;
+- `updatedAt`: time the persisted override was last written, otherwise `null`;
+- `timezone`: the active `TZ` value. Change `TZ` in the container environment,
+  not through this endpoint;
+- `source`: `env` for `CRON_SCHEDULE` or `override` for
+  `config/schedule.json`;
+- `writable`: whether `API_ALLOW_SCHEDULE_WRITE=true` is active.
+
+### `PUT /schedule` and `PATCH /schedule`
+
+Enable schedule writes in the API process first:
+
+```dotenv
+API_ALLOW_SCHEDULE_WRITE=true
+```
+
+For this endpoint, `PUT` and `PATCH` have the same partial-update behavior: only
+fields present in the JSON body are changed. The result is written atomically to
+`config/schedule.json`, then the live crontab is replaced immediately. A
+container restart is not required.
+
+Supported body fields:
+
+| Field                    | Type                   | Description                                                                |
+| ------------------------ | ---------------------- | -------------------------------------------------------------------------- |
+| `enabled`                | boolean                | Install or remove the cron job. Enabling requires a valid `cron` value.    |
+| `cron`                   | string                 | Numeric five-field cron expression, such as `0 7 * * *`.                   |
+| `skipIfRunning`          | boolean                | Scheduler preference retained in the persisted schedule.                   |
+| `excludedAccountIndexes` | positive integer array | Account slots excluded when cron or `RUN_ON_START` triggers a run via API. |
+
+The cron parser accepts `*`, numeric values, comma-separated values, ranges,
+and steps within the normal five-field ranges. Named months/weekdays and macros
+such as `@daily` are not accepted.
+
+**cURL - enable a daily 07:00 schedule and exclude `ACCOUNT_2`**
+
+```bash
+curl --request PATCH \
+  --url http://127.0.0.1:3010/schedule \
+  --header 'Authorization: Bearer YOUR_API_TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"enabled":true,"cron":"0 7 * * *","skipIfRunning":true,"excludedAccountIndexes":[2]}'
+```
+
+**Axios**
+
+```js
+const { data } = await api.patch('/schedule', {
+    enabled: true,
+    cron: '0 7 * * *',
+    skipIfRunning: true,
+    excludedAccountIndexes: [2]
+})
+
+console.log(data)
+```
+
+```json
+{
+    "enabled": true,
+    "cron": "0 7 * * *",
+    "skipIfRunning": true,
+    "excludedAccountIndexes": [2],
+    "updatedAt": "2026-07-16T19:30:00.000Z",
+    "timezone": "Europe/Amsterdam",
+    "source": "override",
+    "writable": true
+}
+```
+
+Disable the saved schedule without deleting its other settings:
+
+```js
+await api.patch('/schedule', { enabled: false })
+```
+
+Disabling removes the live crontab, but the override file remains authoritative.
+To return to the original `CRON_SCHEDULE` environment default, delete
+`config/schedule.json` and restart the container. There is no `DELETE /schedule`
+endpoint.
+
+Invalid cron expressions, non-array exclusions, non-positive indexes, or
+enabling without a cron expression return `400 Bad Request`. When writes are
+disabled, both methods return `403 Forbidden`. Outside the supplied Docker
+image, a write can return `500` if the cron template or `crontab` executable is
+not available.
 
 ## Axios response and error handling
 
@@ -1470,18 +1754,18 @@ curl.exe -sN `
 
 ## HTTP status codes
 
-|                      Status | Meaning in this API                                                                                     |
-| --------------------------: | ------------------------------------------------------------------------------------------------------- |
-|                    `200 OK` | Successful read or config update.                                                                       |
-|              `202 Accepted` | Start, stop, restart, or shutdown request accepted.                                                     |
-|            `204 No Content` | Successful CORS preflight.                                                                              |
-|           `400 Bad Request` | Invalid JSON, invalid account selection, invalid arguments, oversized body, or invalid diagnostic path. |
-|          `401 Unauthorized` | Token required and missing or incorrect.                                                                |
-|             `403 Forbidden` | Config writes or arbitrary environment overrides are disabled.                                          |
-|             `404 Not Found` | Unknown endpoint, missing config, capture, or artifact.                                                 |
-|              `409 Conflict` | Start requested while active, or stop requested while idle.                                             |
-|  `422 Unprocessable Entity` | Proposed config failed validation.                                                                      |
-| `500 Internal Server Error` | Unexpected process, file, validator, or request-handling failure.                                       |
+|                      Status | Meaning in this API                                                                  |
+| --------------------------: | ------------------------------------------------------------------------------------ |
+|                    `200 OK` | Successful read, config/schedule update, or account session deletion.                |
+|              `202 Accepted` | Start, stop, restart, or shutdown request accepted.                                  |
+|            `204 No Content` | Successful CORS preflight.                                                           |
+|           `400 Bad Request` | Invalid JSON, account/email selection, arguments, schedule, oversized body, or path. |
+|          `401 Unauthorized` | Token required and missing or incorrect.                                             |
+|             `403 Forbidden` | Config writes, schedule writes, or arbitrary environment overrides are disabled.     |
+|             `404 Not Found` | Unknown endpoint, missing config/session, capture, or artifact.                      |
+|              `409 Conflict` | Conflicting run state, including session deletion while a run is active.             |
+|  `422 Unprocessable Entity` | Proposed config failed validation.                                                   |
+| `500 Internal Server Error` | Unexpected process, file, cron, validator, or request-handling failure.              |
 
 Most errors use this shape:
 
@@ -1496,22 +1780,30 @@ Most errors use this shape:
 
 All variables are optional.
 
-| Variable                  | Default              | Purpose                                                                                     |
-| ------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
-| `API_HOST`                | `127.0.0.1`          | Interface to bind. Use `0.0.0.0` only when remote/container access is required.             |
-| `API_PORT`                | `3010`               | HTTP listen port.                                                                           |
-| `API_TOKEN`               | unset                | Shared token required by every endpoint when configured.                                    |
-| `API_CORS_ORIGIN`         | `*`                  | Value returned in `Access-Control-Allow-Origin`.                                            |
-| `API_LOG_BUFFER`          | `2000`               | Maximum structured log entries kept in memory.                                              |
-| `API_RUN_HISTORY`         | `20`                 | Maximum completed runs kept in memory.                                                      |
-| `API_STOP_TIMEOUT_MS`     | `15000`              | Graceful-stop window before forced termination.                                             |
-| `API_RUN_COMMAND`         | auto                 | Override the executable used to launch the bot.                                             |
-| `API_RUN_ARGS`            | none                 | Default arguments for `API_RUN_COMMAND`; accepts whitespace-separated text or a JSON array. |
-| `API_DIAGNOSTICS_DIR`     | `<repo>/diagnostics` | Read-only diagnostics directory.                                                            |
-| `API_ALLOW_CONFIG_WRITE`  | `false`              | Permit `PUT` and `PATCH /config`.                                                           |
-| `API_ALLOW_ENV_OVERRIDES` | `false`              | Permit arbitrary `env` fields in `/start` and `/restart`.                                   |
-| `API_ALLOW_CONFIG_REVEAL` | `false`              | Permit authenticated `GET /config?reveal=1`.                                                |
-| `API_VALIDATOR_MODULE`    | auto                 | Path to a compiled module exporting `validateConfig` or `ConfigSchema`.                     |
+| Variable                   | Default                       | Purpose                                                                                     |
+| -------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `API_HOST`                 | `127.0.0.1`                   | Interface to bind. Use `0.0.0.0` only when remote/container access is required.             |
+| `API_PORT`                 | `3010`                        | HTTP listen port.                                                                           |
+| `API_TOKEN`                | unset                         | Shared token required by every endpoint when configured.                                    |
+| `API_CORS_ORIGIN`          | `*`                           | Value returned in `Access-Control-Allow-Origin`.                                            |
+| `API_LOG_BUFFER`           | `2000`                        | Maximum structured log entries kept in memory.                                              |
+| `API_RUN_HISTORY`          | `20`                          | Maximum completed runs kept in memory.                                                      |
+| `API_STOP_TIMEOUT_MS`      | `15000`                       | Graceful-stop window before forced termination.                                             |
+| `API_RUN_COMMAND`          | auto                          | Override the executable used to launch the bot.                                             |
+| `API_RUN_ARGS`             | none                          | Default arguments for `API_RUN_COMMAND`; accepts whitespace-separated text or a JSON array. |
+| `API_DIAGNOSTICS_DIR`      | `<repo>/diagnostics`          | Read-only diagnostics directory.                                                            |
+| `API_ALLOW_CONFIG_WRITE`   | `false`                       | Permit `PUT` and `PATCH /config`.                                                           |
+| `API_ALLOW_SCHEDULE_WRITE` | `false`                       | Permit `PUT` and `PATCH /schedule`.                                                         |
+| `API_ALLOW_ENV_OVERRIDES`  | `false`                       | Permit arbitrary `env` fields in `/start` and `/restart`.                                   |
+| `API_ALLOW_CONFIG_REVEAL`  | `false`                       | Permit authenticated `GET /config?reveal=1`.                                                |
+| `API_VALIDATOR_MODULE`     | auto                          | Path to a compiled module exporting `validateConfig` or `ConfigSchema`.                     |
+| `SCHEDULE_FILE`            | `<repo>/config/schedule.json` | Override the persisted schedule file path.                                                  |
+| `CRON_SCHEDULE`            | unset                         | Base schedule reported and used when no persisted schedule override exists.                 |
+| `TZ`                       | `UTC`                         | Timezone used by cron and returned by `/schedule`.                                          |
+
+The Docker entrypoint also uses `API_MODE=true` to run this API as the main
+container process. In that mode, scheduled and `RUN_ON_START` executions are
+routed through `POST /start`, so the API can observe and control them.
 
 CLI flags can override host, port, and token:
 
@@ -1532,9 +1824,9 @@ rejected because the API intentionally does not use an injection-prone shell.
 
 ## Security guidance
 
-This service can start and stop processes, read logs containing account-related
-information, and potentially reveal or update configuration. Treat it as an
-administrative API.
+This service can start and stop processes, read logs and session metadata,
+delete an account's sessions, and potentially reveal or update configuration.
+Treat it as an administrative API.
 
 - Keep `API_HOST=127.0.0.1` when only local applications need access.
 - Always set `API_TOKEN` before binding to `0.0.0.0` or another non-loopback
@@ -1543,8 +1835,8 @@ administrative API.
   leave the machine.
 - Restrict `API_CORS_ORIGIN` to the actual dashboard origin instead of `*` when
   a browser accesses the API directly.
-- Leave config writes, config reveal, and arbitrary environment overrides
-  disabled unless they are required.
+- Leave config writes, schedule writes, config reveal, and arbitrary environment
+  overrides disabled unless they are required.
 - Avoid putting the API token in URLs except where browser SSE requires it.
 - Do not expose the port directly to the public internet.
 
@@ -1581,17 +1873,31 @@ Restart=on-failure
 
 ### Docker
 
-The API must bind to all container interfaces to be reachable through a
-published port:
+Enable API mode, authenticate it, and publish the port in `compose.yaml`:
+
+```yaml
+services:
+    microsoft-rewards-script:
+        environment:
+            API_MODE: 'true'
+            API_TOKEN: '${API_TOKEN}'
+            API_ALLOW_SCHEDULE_WRITE: 'true' # optional
+            API_ALLOW_CONFIG_WRITE: 'true' # optional
+        ports:
+            - '3010:3010'
+```
+
+Put the matching token in `.env`:
 
 ```dotenv
-API_HOST=0.0.0.0
-API_PORT=3010
 API_TOKEN=replace-with-a-long-random-token
 ```
 
-Publish port `3010` and ensure the bot's compiled files, `.env`, config, sessions,
-and diagnostics are mounted or copied where the bot expects them.
+The supplied Docker entrypoint defaults `API_HOST` to `0.0.0.0` in API mode so
+the published port is reachable. `CRON_SCHEDULE` remains the base schedule until
+`PUT` or `PATCH /schedule` creates `./config/schedule.json`. Cron-triggered and
+`RUN_ON_START` executions call the local API, so they appear in `/status`,
+`/logs`, `/points`, `/events`, and `/history` just like manual runs.
 
 ## Startup readiness
 
@@ -1599,7 +1905,7 @@ After the HTTP server begins listening, it writes one machine-readable line to
 stdout:
 
 ```text
-__API_READY__ {"host":"127.0.0.1","port":3010,"pid":1234,"name":"microsoft-rewards-script","version":"4.0.0","auth":true}
+__API_READY__ {"host":"127.0.0.1","port":3010,"pid":1234,"name":"microsoft-rewards-script","version":"4.0.3","auth":true}
 ```
 
 A launcher can wait for this line rather than relying on a fixed startup delay.
@@ -1608,12 +1914,16 @@ starting a second unusable instance.
 
 ## File layout
 
-| File                | Responsibility                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| `server.js`         | HTTP routing, authentication, CORS, SSE, diagnostics, and config endpoints.          |
-| `processManager.js` | Child-process lifecycle, process-tree termination, log buffering, and status events. |
-| `logParser.js`      | Structured log parsing and live run/point accumulation.                              |
-| `accounts.js`       | Safe account summaries and child-only account selection/remapping.                   |
-| `configEditor.js`   | Config loading, validation, deep merge, backup, and atomic replacement.              |
-| `runCommand.js`     | Cross-platform resolution of the command used to launch the bot.                     |
-| `lib.js`            | Environment, project-root, logging, config-redaction, and argument helpers.          |
+| File                | Responsibility                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `server.js`         | HTTP routing, authentication, CORS, SSE, diagnostics, config, and schedule endpoints. |
+| `processManager.js` | Child-process lifecycle, process-tree termination, log buffering, and status events.  |
+| `logParser.js`      | Structured log parsing and live run/point accumulation.                               |
+| `accounts.js`       | Safe account summaries and child-only account selection/remapping.                    |
+| `configEditor.js`   | Config loading, validation, deep merge, backup, and atomic replacement.               |
+| `scheduleStore.js`  | Schedule validation, persistence, reads, and live crontab application.                |
+| `sessionStore.js`   | Safe session metadata reads and account-specific SQLite session deletion.             |
+| `apply-schedule.js` | Restores a persisted schedule override during Docker startup.                         |
+| `trigger.js`        | Routes Docker cron and `RUN_ON_START` executions through the local API.               |
+| `runCommand.js`     | Cross-platform resolution of the command used to launch the bot.                      |
+| `lib.js`            | Environment, project-root, logging, config-redaction, and argument helpers.           |

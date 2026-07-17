@@ -23,6 +23,7 @@
 - [Config Setup](#config-setup)
     - [Build and run the script (bare metal version)](#build-and-run-the-script-bare-metal-version)
 - [Docker](#docker)
+- [Control API and Dashboard](#control-api-and-dashboard)
 - [Nix Setup](#nix-setup)
 - [Configuration Options](#configuration-options)
     - [Core](#core)
@@ -35,6 +36,7 @@
     - [Proxy](#proxy)
     - [Webhooks](#webhooks)
 - [Troubleshooting](#troubleshooting)
+    - [Session management](#session-management)
 - [Disclaimer](#disclaimer)
 
 ---
@@ -122,6 +124,48 @@ ACCOUNT_1_PASSWORD=your_password
 
 ---
 
+## Control API and Dashboard
+
+The optional Control API lets a local dashboard or another trusted tool monitor
+and control the script over HTTP. See the [complete Control API
+documentation](scripts/api/README.md) for setup, authentication, every endpoint,
+request fields, response examples, and security guidance.
+
+Common uses include:
+
+- checking API health and the current run state with `GET /health` and
+  `GET /status`;
+- reading live points, logs, errors, account summaries, run history, and error
+  diagnostics;
+- listing safe stored-session metadata and deleting the mobile/desktop sessions
+  for one account;
+- starting all accounts with `POST /start` and an empty JSON body;
+- running only one account with `POST /start` and `{"accountIndex":2}`;
+- running all accounts except selected slots with `POST /start` and
+  `{"excludedAccountIndexes":[2,4]}`;
+- stopping or restarting a run with `POST /stop` or `POST /restart`;
+- streaming live logs and status updates from `GET /events` using
+  Server-Sent Events (SSE);
+- reading the active configuration and schedule, with config and schedule
+  changes available only when their explicit `API_ALLOW_*` options are enabled.
+
+For example, start only `ACCOUNT_2` with cURL:
+
+```bash
+curl --request POST \
+  --url http://127.0.0.1:3010/start \
+  --header 'Authorization: Bearer YOUR_API_TOKEN' \
+  --header 'Content-Type: application/json' \
+  --data '{"accountIndex":2}'
+```
+
+For a ready-made web interface, use the supported and endorsed
+[Rewards Dashboard](https://github.com/mgrimace/rewards-dashboard). It connects
+to this Control API to manage runs, accounts, schedules, logs, points, and
+related script settings.
+
+---
+
 ## Nix Setup
 
 If using Nix: `bash scripts/nix/run.sh`
@@ -137,17 +181,17 @@ Edit `config.json` to customize behavior, or set `CONFIG_*` environment variable
 
 ### Core
 
-| Setting                     | Type    | Default      | Description                                | Docker environment variable           |
-| --------------------------- | ------- | ------------ | ------------------------------------------ | ------------------------------------- |
-| `sessionPath`               | string  | `"sessions"` | Directory to store browser sessions        |                                       |
-| `headless`                  | boolean | `false`      | Run browser invisibly                      | Always `true` in Docker               |
-| `clusters`                  | number  | `1`          | Number of concurrent account clusters      | `CONFIG_CLUSTERS`                     |
-| `errorDiagnostics`          | boolean | `false`      | Enable error diagnostics                   | `CONFIG_ERROR_DIAGNOSTICS`            |
-| `ensureStreakProtection`    | boolean | `true`       | Ensure streak protection is enabled        | `CONFIG_ENSURE_STREAK_PROTECTION`     |
-| `autoClaimPunchcardRewards` | boolean | `false`      | Auto-claim completed punchcard rewards     | `CONFIG_AUTO_CLAIM_PUNCHCARD_REWARDS` |
-| `skipNonPointTasks`         | boolean | `true`       | Skip tasks that award no points            | `CONFIG_SKIP_NON_POINT_TASKS`         |
-| `searchOnBingLocalQueries`  | boolean | `false`      | Use the local query list for ExploreOnBing | `CONFIG_SEARCH_ON_BING_LOCAL`         |
-| `globalTimeout`             | string  | `"30sec"`    | Timeout for all actions                    | `CONFIG_GLOBAL_TIMEOUT`               |
+| Setting                     | Type    | Default      | Description                                                        | Docker environment variable           |
+| --------------------------- | ------- | ------------ | ------------------------------------------------------------------ | ------------------------------------- |
+| `sessionPath`               | string  | `"sessions"` | Directory to store browser sessions                                |                                       |
+| `headless`                  | boolean | `false`      | Run browser invisibly                                              | Always `true` in Docker               |
+| `clusters`                  | number  | `1`          | Number of concurrent account clusters                              | `CONFIG_CLUSTERS`                     |
+| `errorDiagnostics`          | boolean | `false`      | Save error and unknown-login page diagnostics under `diagnostics/` | `CONFIG_ERROR_DIAGNOSTICS`            |
+| `ensureStreakProtection`    | boolean | `true`       | Ensure streak protection is enabled                                | `CONFIG_ENSURE_STREAK_PROTECTION`     |
+| `autoClaimPunchcardRewards` | boolean | `false`      | Auto-claim completed punchcard rewards                             | `CONFIG_AUTO_CLAIM_PUNCHCARD_REWARDS` |
+| `skipNonPointTasks`         | boolean | `true`       | Skip tasks that award no points                                    | `CONFIG_SKIP_NON_POINT_TASKS`         |
+| `searchOnBingLocalQueries`  | boolean | `false`      | Use the local query list for ExploreOnBing                         | `CONFIG_SEARCH_ON_BING_LOCAL`         |
+| `globalTimeout`             | string  | `"30sec"`    | Timeout for all actions                                            | `CONFIG_GLOBAL_TIMEOUT`               |
 
 ### Workers
 
@@ -307,6 +351,37 @@ Opt-in features that may change. Disabled by default.
 
 > [!TIP]
 > Most login issues can be fixed by deleting your /sessions folder, and redeploying the script
+
+### Session management
+
+The session utility requires an explicit command, so running it without an
+argument only displays help and never deletes anything.
+
+```bash
+# List stored mobile and desktop sessions
+npm run clear-sessions -- list
+
+# Delete the sessions belonging to one account
+npm run clear-sessions -- email user@example.com
+
+# Delete every stored session
+npm run clear-sessions -- all
+```
+
+```bash
+# List safe session metadata
+curl --request GET \
+  --url http://127.0.0.1:3010/sessions \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'
+
+# Delete only user@example.com's mobile and desktop sessions
+curl --request DELETE \
+  --url http://127.0.0.1:3010/sessions/user%40example.com \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'
+```
+
+See the [Control API session documentation](scripts/api/README.md#session-management)
+for response data, Axios examples, and error behavior.
 
 ---
 

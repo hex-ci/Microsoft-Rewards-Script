@@ -341,11 +341,11 @@ if [ "${API_MODE:-false}" = "true" ]; then
   # API-integrated mode:
   #   - The API server is the main (foreground) process and becomes PID 1.
   #   - The cron schedule can come from two places, checked in this order:
-  #       1. config/schedule.json — a persisted override written by
+  #       1. config/schedule.json - a persisted override written by
   #          PUT /schedule (e.g. from the dashboard). Present only if that
   #          endpoint has been used at least once; survives restarts because
   #          it lives in the ./config bind mount.
-  #       2. CRON_SCHEDULE — the env var, exactly as before. This remains the
+  #       2. CRON_SCHEDULE - the env var, exactly as before. This remains the
   #          only thing that matters for anyone not using PUT /schedule.
   #   - Either way, if a schedule is active, cron runs as a background daemon;
   #     run_daily.sh detects API_MODE=true and calls POST /start via
@@ -358,7 +358,7 @@ if [ "${API_MODE:-false}" = "true" ]; then
   SCHEDULE_OVERRIDE="${SCHEDULE_FILE:-$SCRIPT_DIR/config/schedule.json}"
 
   if [ -f "$SCHEDULE_OVERRIDE" ]; then
-    echo "[entrypoint] Found $SCHEDULE_OVERRIDE — applying it (overrides CRON_SCHEDULE)."
+    echo "[entrypoint] Found $SCHEDULE_OVERRIDE - applying it (overrides CRON_SCHEDULE)."
     if node scripts/api/apply-schedule.js; then
       cron -f &
       echo "[entrypoint] Cron started in background (schedule: from schedule.json, TZ: $TZ)"
@@ -377,7 +377,7 @@ if [ "${API_MODE:-false}" = "true" ]; then
     cron -f &
     echo "[entrypoint] Cron started in background (schedule: $CRON_SCHEDULE, TZ: $TZ)"
   else
-    echo "[entrypoint] No CRON_SCHEDULE set and no schedule.json override — runs must be triggered manually via POST /start, or scheduled from the dashboard."
+    echo "[entrypoint] No CRON_SCHEDULE set and no schedule.json override - runs must be triggered manually via POST /start, or scheduled from the dashboard."
   fi
   echo "[entrypoint] Starting control API on ${API_HOST}:${API_PORT:-3010} at $(date)"
   exec node scripts/api/server.js

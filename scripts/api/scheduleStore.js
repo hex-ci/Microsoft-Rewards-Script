@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
-// Kept in sync with rewards-dashboard/lib/cron.js's isValidCron — same
+// Kept in sync with rewards-dashboard/lib/cron.js's isValidCron - same
 // 5-field grammar. Duplicated here because the bot and dashboard are
 // separate projects that don't share a package.
 const CRON_FIELD_RANGES = [
@@ -145,7 +145,7 @@ const CRON_TEMPLATE = '/etc/cron.d/microsoft-rewards-cron.template'
 
 /**
  * Renders the crontab template with the given schedule and loads it live via
- * `crontab <file>` — the same mechanism entrypoint.sh uses at startup, which
+ * `crontab <file>` - the same mechanism entrypoint.sh uses at startup, which
  * is why cron picks it up without a container restart. Note the template has
  * no `user` field, so it's only valid when loaded via `crontab`, not via
  * cron.d's own directory auto-scan.
@@ -155,18 +155,18 @@ export function applyCrontab({ enabled, cron }) {
         try {
             execFileSync('crontab', ['-r'], { stdio: 'ignore' })
         } catch {
-            // nothing to remove — fine
+            // nothing to remove - fine
         }
         try {
             fs.unlinkSync(CRON_FILE)
         } catch {
-            // already gone — fine
+            // already gone - fine
         }
         return
     }
 
     if (!fs.existsSync(CRON_TEMPLATE)) {
-        throw Object.assign(new Error(`Cron template not found at ${CRON_TEMPLATE} — image may be corrupt.`), {
+        throw Object.assign(new Error(`Cron template not found at ${CRON_TEMPLATE} - image may be corrupt.`), {
             code: 'TEMPLATE_MISSING'
         })
     }

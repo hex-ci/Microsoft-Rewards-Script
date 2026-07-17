@@ -424,30 +424,9 @@ export class Workers {
         this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', 'Finished processing quests')
     }
 
-    public async doClaimBonusPoints(data: DashboardData) {
-        const pointsActivity = data.dashboard.pointClaimBannerPromotion
-
-        if (!pointsActivity) {
-            this.bot.logger.info(this.bot.isMobile, 'CLAIM-BONUS-POINTS', 'No claim bonus points banner found')
-            return
-        }
-
-        if (pointsActivity.complete) {
-            this.bot.logger.info(
-                this.bot.isMobile,
-                'CLAIM-BONUS-POINTS',
-                `Bonus points have already been claimed | offerId=${pointsActivity.offerId}`
-            )
-            return
-        }
-
+    public async doClaimBonusPoints() {
+        // Let's just always try to do this
         await this.bot.activities.doClaimBonusPoints()
-
-        this.bot.logger.info(
-            this.bot.isMobile,
-            'CLAIM-BONUS-POINTS',
-            `Bonus points have been claimed | title="${pointsActivity.title}" | offerId=${pointsActivity.offerId}`
-        )
     }
 
     private async solvePunchCard(parent: ParentQuest, apiCard: PunchCard | undefined, page: Page) {

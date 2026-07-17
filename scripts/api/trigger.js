@@ -96,7 +96,7 @@ if (!ready) {
 const { status, body } = await request('POST', '/start', buildStartBody())
 
 if (status === 409) {
-    // A run is already in progress — the dashboard or a previous cron invocation
+    // A run is already in progress - the dashboard or a previous cron invocation
     // beat us to it.  Exit cleanly so the lockfile is released.
     console.log('[trigger] A run is already in progress (409 Conflict). Skipping.')
     process.exit(0)
@@ -120,7 +120,7 @@ while (Date.now() < deadline) {
             process.exit(0)
         }
     } catch {
-        /* momentary blip — keep polling */
+        /* momentary blip - keep polling */
     }
 }
 

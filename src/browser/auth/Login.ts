@@ -2,6 +2,7 @@ import { URLs, REWARDS_BASE_URL } from '../../constants/urls'
 import type { Page } from 'patchright'
 import type { MicrosoftRewardsBot } from '../../index'
 import { saveStorageState } from '../../util/SessionStore'
+import { unknownPageDiagnostic } from '../../util/ErrorDiagnostic'
 
 import { MobileAccessLogin } from './methods/MobileAccessLogin'
 import { EmailLogin } from './methods/EmailLogin'
@@ -39,6 +40,8 @@ export class Login {
     codeLogin: CodeLogin
     recoveryLogin: RecoveryLogin
 
+    private readonly capturedUnknownUrls = new Set<string>()
+
     private readonly selectors = {
         primaryButton: 'button[data-testid="primaryButton"]',
         secondaryButton: 'button[data-testid="secondaryButton"]',
@@ -75,6 +78,7 @@ export class Login {
 
     async login(page: Page, account: Account) {
         try {
+            this.capturedUnknownUrls.clear()
             this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'Starting login process')
 
             await page
@@ -485,12 +489,20 @@ export class Login {
             }
 
             case 'UNKNOWN': {
-                const url = new URL(page.url())
+                const rawUrl = page.url()
+                const url = new URL(rawUrl)
                 this.bot.logger.warn(
                     this.bot.isMobile,
                     'LOGIN',
                     `Unknown state at ${url.hostname}${url.pathname}, waiting`
                 )
+
+                if (this.bot.config.errorDiagnostics && !this.capturedUnknownUrls.has(rawUrl)) {
+                    this.capturedUnknownUrls.add(rawUrl)
+                    await unknownPageDiagnostic(page, {
+                        platform: this.bot.isMobile ? 'mobile' : 'desktop'
+                    })
+                }
                 return true
             }
 
