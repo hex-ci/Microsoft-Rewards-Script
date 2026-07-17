@@ -111,9 +111,11 @@ export default class ReactFunc {
     public buildId(html: string): string | null {
         const combined = this.concatFlightChunks(html)
         return (
-            combined.match(/"buildId":"([A-Za-z0-9_-]{21})"/)?.[1] ??
-            combined.match(/"b":"([A-Za-z0-9_-]{21})"/)?.[1] ??
-            html.match(/\/_next\/static\/([A-Za-z0-9_-]{21})\//)?.[1] ??
+            html.match(/[?&](?:amp;)?dpl=([A-Za-z0-9._-]+)/i)?.[1] ??
+            combined.match(/[?&](?:amp;)?dpl=([A-Za-z0-9._-]+)/i)?.[1] ??
+            combined.match(/"buildId":"([A-Za-z0-9._-]+)"/)?.[1] ??
+            combined.match(/"b":"([A-Za-z0-9._-]{8,})"/)?.[1] ??
+            html.match(/\/_next\/static\/([A-Za-z0-9._-]+)\//)?.[1] ??
             null
         )
     }
@@ -245,6 +247,16 @@ export default class ReactFunc {
                 const isCompleted = ((obj.isCompleted ?? obj.complete) as boolean | undefined) === true
                 const isLocked = (obj.isLocked as boolean | undefined) === true
                 const date = this.normaliseDate(obj.date as string | undefined)
+                const attributes =
+                    obj.attributes && typeof obj.attributes === 'object'
+                        ? (obj.attributes as Record<string, unknown>)
+                        : null
+                const activityTypeValue = obj.activityType ?? obj.activity_type ?? attributes?.activity_type
+                const parsedActivityType = Number(activityTypeValue)
+                const promotionalValue = obj.isPromotional ?? attributes?.promotional
+                const isPromotional =
+                    promotionalValue === true ||
+                    (typeof promotionalValue === 'string' && promotionalValue.toLowerCase() === 'true')
 
                 // Never try future-dated offers, lol
                 const reportable = !!hash && !isCompleted && !isLocked && (date === null || date <= today)
@@ -258,11 +270,12 @@ export default class ReactFunc {
                     promotionSubtype: (obj.promotionSubtype as string | null) ?? null,
                     destination: (obj.destination as string) ?? (obj.destinationUrl as string) ?? '',
                     isCompleted,
-                    isPromotional: (obj.isPromotional as boolean | undefined) === true,
+                    isPromotional,
                     isLocked,
                     unlockCriteria: (obj.unlockCriteria as string | null) ?? null,
                     date,
-                    activityType: null, // merge from getuserinfo later???
+                    activityType:
+                        Number.isInteger(parsedActivityType) && parsedActivityType > 0 ? parsedActivityType : null,
                     reportable
                 })
             }
