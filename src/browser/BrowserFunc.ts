@@ -6,6 +6,7 @@ import type { BrowserContext, Cookie, Page } from 'patchright'
 import type { HttpRequestConfig } from '../util/Http'
 
 import type { MicrosoftRewardsBot } from '../index'
+import type { PageSnapshot } from './ReactFunc'
 import { saveStorageState } from '../util/SessionStore'
 import { isBrowserClosedError } from '../util/Utils'
 
@@ -14,8 +15,12 @@ import type { AppUserData } from '../interface/AppUserData'
 import type { AppEarnablePoints, BrowserEarnablePoints, MissingSearchPoints } from '../interface/Points'
 import type { AppDashboardData } from '../interface/AppDashBoardData'
 
-// Bing-hosted image used to seed the daily visual search. /images/kblob fetches it (Can be changed)
+// Fallback seed only. bcid is derived from the image BYTES, so a fixed seed produces the same blob each time
+// Bing treats same search as a repeat search and credits nothing.
 const VISUAL_SEARCH_IMAGE_URL = 'https://th.bing.com/th?id=OMR.VisualSearch.VNext.BackgroundImage.png&pid=Rewards'
+
+// Bing's own wallpaper archive, used to rotate the seed. idx 0-7 covers the last 8 days
+const VISUAL_SEARCH_ARCHIVE_SIZE = 8
 
 export default class BrowserFunc {
     private bot: MicrosoftRewardsBot
@@ -608,7 +613,7 @@ export default class BrowserFunc {
         }
 
         const params = new URLSearchParams({ IG: ig, IID: 'SERP.5064', q: query, FORM: 'ANNTA1', cvid, ajaxreq: '1' })
-        // Credit the offer rather than only the daily search counter!
+
         const reportUrl = `${URLs.bing.origin}/rewardsapp/reportActivity?${params.toString()}${opts?.cg ? `&cg=${opts.cg}` : ''}`
 
         const reportRes = await this.bot.http.request({
@@ -730,9 +735,7 @@ export default class BrowserFunc {
         }
     }
 
-    async acquireVisualSearch(
-        imageUrl: string = VISUAL_SEARCH_IMAGE_URL
-    ): Promise<{ bcid: string; query: string; serpUrl: string } | null> {
+    async acquireVisualSearch(imageUrl?: string): Promise<{ bcid: string; query: string; serpUrl: string } | null> {
         try {
             const page = this.bot.mainDesktopPage
             if (!page || page.isClosed()) {
@@ -744,11 +747,13 @@ export default class BrowserFunc {
                 return null
             }
 
+            const seed = imageUrl ?? (await this.resolveVisualSearchImage(page))
+
             const base = { ...(this.bot.fingerprint?.headers ?? {}) }
             delete base['Cookie']
             delete base['cookie']
 
-            const enc = encodeURIComponent(imageUrl)
+            const enc = encodeURIComponent(seed)
             const url =
                 `${URLs.bing.origin}/images/kblob` + `?iss=sbi&form=SBIHMP&sbisrc=UrlPaste&vsimg=${enc}&imgurl=${enc}`
 
@@ -803,7 +808,7 @@ export default class BrowserFunc {
             this.bot.logger.info(
                 this.bot.isMobile,
                 'VISUAL-SEARCH-BCID',
-                `Acquired bcid=${bcid.slice(0, 14)} | q="${query}" | status=${res.status()}`,
+                `Acquired bcid=${bcid.slice(0, 14)} | q="${query}" | status=${res.status()} | seed=${seed.slice(0, 80)}`,
                 'green'
             )
             return { bcid, query, serpUrl }
@@ -812,6 +817,65 @@ export default class BrowserFunc {
                 this.bot.isMobile,
                 'VISUAL-SEARCH-BCID',
                 `Failed to acquire visual search | ${error instanceof Error ? error.message : String(error)}`
+            )
+            return null
+        }
+    }
+
+    private async resolveVisualSearchImage(page: Page): Promise<string> {
+        const idx = Math.floor(Math.random() * VISUAL_SEARCH_ARCHIVE_SIZE)
+
+        try {
+            const res = await page.request.get(
+                `${URLs.bing.origin}/HPImageArchive.aspx?format=js&idx=${idx}&n=1&mkt=en-US`,
+                { timeout: 10000 }
+            )
+
+            if (res.ok()) {
+                const payload = (await res.json()) as { images?: { url?: unknown }[] }
+                const url = payload?.images?.[0]?.url
+                if (typeof url === 'string' && url) {
+                    return new URL(url, URLs.bing.origin).toString()
+                }
+            }
+
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'VISUAL-SEARCH-BCID',
+                `HPImageArchive returned no usable url | idx=${idx} | status=${res.status()} - using the static seed`
+            )
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'VISUAL-SEARCH-BCID',
+                `HPImageArchive lookup failed | ${error instanceof Error ? error.message : String(error)} - using the static seed`
+            )
+        }
+
+        return VISUAL_SEARCH_IMAGE_URL
+    }
+
+    async refreshEarnSnapshot(): Promise<PageSnapshot | null> {
+        const page = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
+        if (!page || page.isClosed()) return null
+
+        try {
+            const res = await page.request.get(URLs.rewards.earn, { timeout: 20000 })
+            if (!res.ok()) {
+                this.bot.logger.debug(
+                    this.bot.isMobile,
+                    'EARN-SNAPSHOT',
+                    `Failed to fetch /earn | status=${res.status()}`
+                )
+                return null
+            }
+
+            return this.bot.browser.react.snapshotPage(await res.text())
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'EARN-SNAPSHOT',
+                `Failed to refresh /earn snapshot | ${error instanceof Error ? error.message : String(error)}`
             )
             return null
         }

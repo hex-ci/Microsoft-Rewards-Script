@@ -5,11 +5,15 @@ import type { DashboardData } from '../../../interface/DashboardData'
 
 const VISUAL_SEARCH_ACTIVATION_OFFER = 'visualsearch_streak_activation_v2'
 
-const VERIFIED_ACTIVITY_TYPES: Readonly<Record<string, number>> = {
-    WW_VisualSearch_SummerJuly26_Activation_Banner: 11
-}
+// 11 is confirmed for the July banner and carried over to the v2 offer, verify before trusting it there
+const VERIFIED_ACTIVITY_TYPES = new Map<string, number>([
+    ['ww_visualsearch_summerjuly26_activation_banner', 11],
+    ['visualsearch_streak_activation_v2', 11]
+])
 
 const MAX_ATTEMPTS = 3
+
+const MAX_SEED_ROLLS = 3
 
 type ActivationResult = 'activated' | 'already-active' | 'absent' | 'failed'
 
@@ -27,6 +31,8 @@ export class VisualSearch extends Workers {
         }
 
         const streak = this.findStreak()
+        this.logStreakState(streak)
+
         if (streak?.isCurrentDayCompleted) {
             this.bot.logger.info(
                 this.bot.isMobile,
@@ -52,8 +58,34 @@ export class VisualSearch extends Workers {
         return await this.performDailySearch()
     }
 
-    private findStreak(): StreakState | undefined {
-        return (this.bot.reactSnapshot?.streaks ?? []).find(s => /visual.?search/i.test(s.partner))
+    private findStreak(streaks?: StreakState[]): StreakState | undefined {
+        const source = streaks ?? this.bot.reactSnapshot?.streaks ?? []
+        return source.find(s => /visual.?search/i.test(s.partner))
+    }
+
+    private logStreakState(streak: StreakState | undefined): void {
+        if (!streak) {
+            this.bot.logger.info(
+                this.bot.isMobile,
+                'VISUAL-SEARCH',
+                'No visual-search streak in the snapshot - falling back to the activation offer'
+            )
+            return
+        }
+
+        this.bot.logger.info(
+            this.bot.isMobile,
+            'VISUAL-SEARCH',
+            `Streak state | partner="${streak.partner}" | enabled=${streak.isEnabled} | dayCompleted=${streak.isCurrentDayCompleted} | days=${streak.completedDays}/${streak.totalDays} | currentDay=${streak.currentDay} | activities=${streak.activitiesCompleted}/${streak.activitiesTotal}`
+        )
+
+        if (!streak.isEnabled) {
+            this.bot.logger.warn(
+                this.bot.isMobile,
+                'VISUAL-SEARCH',
+                'Streak is present but not enabled - searches will not register until it is switched on'
+            )
+        }
     }
 
     private async activate(data: DashboardData): Promise<ActivationResult> {
@@ -96,7 +128,8 @@ export class VisualSearch extends Workers {
             return 'failed'
         }
 
-        const metadata = this.resolveActivationMetadata(offer, data)
+        const dashboard = await this.resolveDashboard(data)
+        const metadata = this.resolveActivationMetadata(offer, dashboard)
         if (!metadata) {
             this.bot.logger.warn(
                 this.bot.isMobile,
@@ -150,6 +183,19 @@ export class VisualSearch extends Workers {
         }
     }
 
+    private async resolveDashboard(fallback: DashboardData): Promise<DashboardData> {
+        try {
+            return await this.bot.browser.func.getDashboardData(this.bot.cookies.desktop)
+        } catch {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'VISUAL-SEARCH',
+                'Desktop dashboard fetch failed - falling back to the dashboard from the mobile pass'
+            )
+            return fallback
+        }
+    }
+
     private resolveActivationMetadata(offer: ParsedOffer, data: DashboardData): ActivationMetadata | null {
         const dashboardPromotion = this.findDashboardPromotion(data.dashboard, offer.offerId)
 
@@ -170,7 +216,7 @@ export class VisualSearch extends Workers {
             }
         }
 
-        const verifiedFallback = VERIFIED_ACTIVITY_TYPES[offer.offerId]
+        const verifiedFallback = VERIFIED_ACTIVITY_TYPES.get(offer.offerId.toLowerCase())
         if (verifiedFallback !== undefined) {
             return {
                 activityType: verifiedFallback,
@@ -193,7 +239,7 @@ export class VisualSearch extends Workers {
             visited.add(value)
 
             if (Array.isArray(value)) {
-                pending.push(...value)
+                for (const entry of value) pending.push(entry)
                 continue
             }
 
@@ -202,7 +248,7 @@ export class VisualSearch extends Workers {
             const candidateId = record.offerId ?? record.offerid ?? attributes?.offerid
             if (typeof candidateId === 'string' && candidateId.toLowerCase() === target) return record
 
-            pending.push(...Object.values(record))
+            for (const entry of Object.values(record)) pending.push(entry)
         }
 
         return null
@@ -247,14 +293,11 @@ export class VisualSearch extends Workers {
     }
 
     private async performDailySearch(): Promise<number> {
+        const seenBcids = new Set<string>()
+
         for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            const visual = await this.bot.browser.func.acquireVisualSearch()
+            const visual = await this.acquireFreshVisualSearch(seenBcids, attempt)
             if (!visual) {
-                this.bot.logger.warn(
-                    this.bot.isMobile,
-                    'VISUAL-SEARCH',
-                    `Could not obtain a visual search (attempt ${attempt}/${MAX_ATTEMPTS})`
-                )
                 await this.bot.utils.wait(this.bot.utils.randomDelay(3000, 6000))
                 continue
             }
@@ -273,6 +316,16 @@ export class VisualSearch extends Workers {
                     'green'
                 )
                 return gained
+            }
+
+            if (await this.dayRegistered()) {
+                this.bot.logger.info(
+                    this.bot.isMobile,
+                    'VISUAL-SEARCH',
+                    `Daily visual search registered | pointsGained=0 (streak pays out on milestones) | query="${visual.query}"`,
+                    'green'
+                )
+                return 0
             }
 
             if (res.ig) {
@@ -298,5 +351,58 @@ export class VisualSearch extends Workers {
             `Daily visual search did not credit after ${MAX_ATTEMPTS} attempts`
         )
         return 0
+    }
+
+    // bcid is derived from the image bytes, so a repeated seed produces a blob bing already credited
+    private async acquireFreshVisualSearch(
+        seen: Set<string>,
+        attempt: number
+    ): Promise<{ bcid: string; query: string; serpUrl: string } | null> {
+        for (let roll = 1; roll <= MAX_SEED_ROLLS; roll++) {
+            const visual = await this.bot.browser.func.acquireVisualSearch()
+            if (!visual) {
+                this.bot.logger.warn(
+                    this.bot.isMobile,
+                    'VISUAL-SEARCH',
+                    `Could not obtain a visual search (attempt ${attempt}/${MAX_ATTEMPTS})`
+                )
+                return null
+            }
+
+            if (!seen.has(visual.bcid)) {
+                seen.add(visual.bcid)
+                return visual
+            }
+
+            this.bot.logger.warn(
+                this.bot.isMobile,
+                'VISUAL-SEARCH',
+                `Seed produced an already-used bcid=${visual.bcid.slice(0, 14)} - re-rolling (${roll}/${MAX_SEED_ROLLS})`
+            )
+            await this.bot.utils.wait(this.bot.utils.randomDelay(1000, 2000))
+        }
+
+        this.bot.logger.warn(
+            this.bot.isMobile,
+            'VISUAL-SEARCH',
+            `Seed rotation is not varying the bcid (attempt ${attempt}/${MAX_ATTEMPTS}) - check the image source`
+        )
+        return null
+    }
+
+    private async dayRegistered(): Promise<boolean> {
+        const snapshot = await this.bot.browser.func.refreshEarnSnapshot()
+        if (!snapshot) return false
+
+        const streak = this.findStreak(snapshot.streaks)
+        if (!streak) return false
+        if (streak.isCurrentDayCompleted) return true
+
+        this.bot.logger.debug(
+            this.bot.isMobile,
+            'VISUAL-SEARCH',
+            `Streak still open after reporting | days=${streak.completedDays}/${streak.totalDays} | activities=${streak.activitiesCompleted}/${streak.activitiesTotal}`
+        )
+        return false
     }
 }
