@@ -244,9 +244,6 @@ export default class BrowserFunc {
 
             this.bot.nextRouterStateTree = this.bot.browser.react.routerStateTree('earn')
 
-            //offers (valid hashes), streaks, account state
-            this.bot.reactSnapshot = this.bot.browser.react.snapshotPage(earnHtml)
-
             // pull /dashboard HTML to capture chunks that /earn doesn't show
             let dashboardHtml = ''
             try {
@@ -268,10 +265,12 @@ export default class BrowserFunc {
                 )
             }
 
+            this.bot.reactSnapshot = this.bot.browser.react.snapshotPage([earnHtml, dashboardHtml])
+
             // discovered from chunks referenced by either page
             this.bot.nextActions = await this.resolveActionIds(page, [earnHtml, dashboardHtml])
 
-            const dashboardRendered = /<section\b[^>]*\bid=["']dailyset["']/i.test(dashboardHtml || earnHtml)
+            const dashboardRendered = /<section\b[^>]*\bid=["']dailyset["']/i.test(`${earnHtml}\n${dashboardHtml}`)
             if (!dashboardRendered) {
                 throw new Error(
                     'Rewards dashboard did not render (no section#dailyset) - likely a login/redirect issue, aborting'
@@ -859,26 +858,34 @@ export default class BrowserFunc {
         const page = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
         if (!page || page.isClosed()) return null
 
-        try {
-            const res = await page.request.get(URLs.rewards.earn, { timeout: 20000 })
-            if (!res.ok()) {
+        const fetchSnapshotPage = async (url: string, route: string): Promise<string | null> => {
+            try {
+                const res = await page.request.get(url, { timeout: 20000 })
+                if (res.ok()) return await res.text()
+
                 this.bot.logger.debug(
                     this.bot.isMobile,
                     'EARN-SNAPSHOT',
-                    `Failed to fetch /earn | status=${res.status()}`
+                    `Failed to fetch ${route} | status=${res.status()}`
+                )
+                return null
+            } catch (error) {
+                this.bot.logger.debug(
+                    this.bot.isMobile,
+                    'EARN-SNAPSHOT',
+                    `Failed to refresh ${route} snapshot | ${error instanceof Error ? error.message : String(error)}`
                 )
                 return null
             }
-
-            return this.bot.browser.react.snapshotPage(await res.text())
-        } catch (error) {
-            this.bot.logger.debug(
-                this.bot.isMobile,
-                'EARN-SNAPSHOT',
-                `Failed to refresh /earn snapshot | ${error instanceof Error ? error.message : String(error)}`
-            )
-            return null
         }
+
+        const pages = await Promise.all([
+            fetchSnapshotPage(URLs.rewards.earn, '/earn'),
+            fetchSnapshotPage(URLs.rewards.dashboard, '/dashboard')
+        ])
+        const availablePages = pages.filter((html): html is string => html !== null)
+
+        return availablePages.length ? this.bot.browser.react.snapshotPage(availablePages) : null
     }
 
     resetHttpJars(): void {

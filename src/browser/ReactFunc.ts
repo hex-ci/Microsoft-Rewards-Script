@@ -75,8 +75,8 @@ export default class ReactFunc {
         this.bot = bot
     }
 
-    // Parse all avalable data from provided page
-    public snapshotPage(html: string): PageSnapshot {
+    // Parse all available data from the provided pages into one snapshot
+    public snapshotPage(html: string | readonly string[]): PageSnapshot {
         const combined = this.concatFlightChunks(html)
 
         const offers = this.parseOffers(combined)
@@ -120,30 +120,38 @@ export default class ReactFunc {
         )
     }
 
-    private concatFlightChunks(html: string): string {
+    private concatFlightChunks(html: string | readonly string[]): string {
         try {
             const pushRe = /self\.__next_f\.push\(\[1,\s*"((?:[^"\\]|\\.)*)"\]\)/g
+            const pages = typeof html === 'string' ? [html] : html
             let combined = ''
             let count = 0
 
-            for (const match of html.matchAll(pushRe)) {
-                try {
-                    // Re-wrap in quotes so JSON.parse decodes
-                    combined += JSON.parse(`"${match[1]}"`)
-                    count++
-                } catch (err) {
-                    this.bot.logger.debug(
-                        this.bot.isMobile,
-                        'REACT-PARSE',
-                        `Skipped undecodable flight chunk | error=${err instanceof Error ? err.message : String(err)}`
-                    )
+            for (const page of pages) {
+                let pageChunks = 0
+
+                for (const match of page.matchAll(pushRe)) {
+                    try {
+                        // Re-wrap in quotes so JSON.parse decodes
+                        combined += JSON.parse(`"${match[1]}"`)
+                        count++
+                        pageChunks++
+                    } catch (err) {
+                        this.bot.logger.debug(
+                            this.bot.isMobile,
+                            'REACT-PARSE',
+                            `Skipped undecodable flight chunk | error=${err instanceof Error ? err.message : String(err)}`
+                        )
+                    }
                 }
+
+                if (pageChunks > 0) combined += '\n'
             }
 
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'REACT-PARSE',
-                `Concatenated flight chunks | chunks=${count} | length=${combined.length}`
+                `Concatenated flight chunks | pages=${pages.length} | chunks=${count} | length=${combined.length}`
             )
 
             if (count === 0) {
@@ -168,56 +176,67 @@ export default class ReactFunc {
     // Find every object containing "anchor" and return them as parsed JSON
     private extractObjects(combined: string, anchor: string): Record<string, unknown>[] {
         const out: Record<string, unknown>[] = []
-        let i = 0
+        const anchorKey = anchor.replace(/^"|"$/g, '')
+        let cursor = 0
         let failures = 0
 
-        while ((i = combined.indexOf(anchor, i)) !== -1) {
-            const start = combined.lastIndexOf('{', i)
-            if (start === -1) {
-                i += anchor.length
-                continue
-            }
+        while (cursor < combined.length) {
+            const anchorIndex = combined.indexOf(anchor, cursor)
+            if (anchorIndex === -1) break
 
-            let depth = 0
-            let end = -1
-            let inStr = false
-            let esc = false
+            cursor = anchorIndex + anchor.length
+            let start = combined.lastIndexOf('{', anchorIndex)
+            let extracted = false
 
-            for (let j = start; j < combined.length; j++) {
-                const c = combined[j]
-                if (esc) {
-                    esc = false
-                    continue
-                }
-                if (c === '\\') {
-                    esc = true
-                    continue
-                }
-                if (c === '"') {
-                    inStr = !inStr
-                    continue
-                }
-                if (inStr) continue
-                if (c === '{') depth++
-                else if (c === '}') {
-                    depth--
-                    if (depth === 0) {
-                        end = j
-                        break
+            while (start !== -1) {
+                let depth = 0
+                let end = -1
+                let inStr = false
+                let esc = false
+
+                for (let j = start; j < combined.length; j++) {
+                    const c = combined[j]
+                    if (esc) {
+                        esc = false
+                        continue
+                    }
+                    if (inStr && c === '\\') {
+                        esc = true
+                        continue
+                    }
+                    if (c === '"') {
+                        inStr = !inStr
+                        continue
+                    }
+                    if (inStr) continue
+                    if (c === '{') depth++
+                    else if (c === '}') {
+                        depth--
+                        if (depth === 0) {
+                            end = j
+                            break
+                        }
                     }
                 }
+
+                if (end >= anchorIndex) {
+                    const raw = combined.slice(start, end + 1)
+
+                    try {
+                        const parsed = JSON.parse(raw.replace(/"\$undefined"/g, 'null')) as Record<string, unknown>
+                        if (Object.prototype.hasOwnProperty.call(parsed, anchorKey)) {
+                            out.push(parsed)
+                            cursor = Math.max(cursor, end + 1)
+                            extracted = true
+                            break
+                        }
+                    } catch {}
+                }
+
+                start = combined.lastIndexOf('{', start - 1)
             }
 
-            if (end === -1) break
-
-            const raw = combined.slice(start, end + 1)
-            i = end
-
-            try {
-                out.push(JSON.parse(raw.replace(/"\$undefined"/g, 'null')))
-            } catch {
-                failures++
-            }
+            if (!extracted) failures++
         }
 
         if (failures > 0) {
@@ -234,14 +253,12 @@ export default class ReactFunc {
     // Section parsers
     private parseOffers(combined: string): ParsedOffer[] {
         try {
-            const seen = new Set<string>()
             const today = this.todayStamp()
-            const offers: ParsedOffer[] = []
+            const offers = new Map<string, ParsedOffer>()
 
             for (const obj of this.extractObjects(combined, '"offerId"')) {
                 const offerId = obj.offerId as string | undefined
-                if (!offerId || seen.has(offerId)) continue
-                seen.add(offerId)
+                if (!offerId) continue
 
                 const hash = (obj.hash as string | null) ?? null
                 const isCompleted = ((obj.isCompleted ?? obj.complete) as boolean | undefined) === true
@@ -261,7 +278,7 @@ export default class ReactFunc {
                 // Never try future-dated offers, lol
                 const reportable = !!hash && !isCompleted && !isLocked && (date === null || date <= today)
 
-                offers.push({
+                const candidate: ParsedOffer = {
                     offerId,
                     hash,
                     title: (obj.title as string) ?? '',
@@ -277,16 +294,42 @@ export default class ReactFunc {
                     activityType:
                         Number.isInteger(parsedActivityType) && parsedActivityType > 0 ? parsedActivityType : null,
                     reportable
-                })
+                }
+
+                const existing = offers.get(offerId)
+                if (!existing) {
+                    offers.set(offerId, candidate)
+                    continue
+                }
+
+                existing.hash ??= candidate.hash
+                existing.title ||= candidate.title
+                existing.description ||= candidate.description
+                existing.points ||= candidate.points
+                existing.promotionSubtype ??= candidate.promotionSubtype
+                existing.destination ||= candidate.destination
+                existing.isCompleted ||= candidate.isCompleted
+                existing.isPromotional ||= candidate.isPromotional
+                existing.isLocked ||= candidate.isLocked
+                existing.unlockCriteria ??= candidate.unlockCriteria
+                existing.date ??= candidate.date
+                existing.activityType ??= candidate.activityType
+                existing.reportable =
+                    !!existing.hash &&
+                    !existing.isCompleted &&
+                    !existing.isLocked &&
+                    (existing.date === null || existing.date <= today)
             }
+
+            const unique = [...offers.values()]
 
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'REACT-PARSE',
-                `Parsed offers | total=${offers.length} | reportable=${offers.filter(o => o.reportable).length}`
+                `Parsed offers | total=${unique.length} | reportable=${unique.filter(o => o.reportable).length}`
             )
 
-            return offers
+            return unique
         } catch (error) {
             this.bot.logger.error(
                 this.bot.isMobile,

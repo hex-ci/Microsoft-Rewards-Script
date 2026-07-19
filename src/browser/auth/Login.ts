@@ -628,7 +628,7 @@ export class Login {
                 this.bot.logger.warn(
                     this.bot.isMobile,
                     'GET-REWARD-SESSION',
-                    'Page snapshot empty - the /earn page may not have rendered the RSC payload'
+                    'Page snapshot empty - neither /earn nor /dashboard rendered a usable RSC payload'
                 )
             }
 
