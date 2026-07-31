@@ -1,8 +1,14 @@
-function envStrFrom(sourceEnv, key) {
-    const v = sourceEnv[key]
-    if (v === undefined) return undefined
-    const t = String(v).trim()
-    return t.length ? t : undefined
+import { accountIndexesFromEnv, envStrFrom } from '../env.js'
+
+function sanitizeProxyUrl(value) {
+    try {
+        const url = new URL(value)
+        url.username = ''
+        url.password = ''
+        return url.toString().replace(/\/$/, '')
+    } catch {
+        return value.replace(/^(?:[^/@\s]+@|([a-z][a-z0-9+.-]*:\/\/)[^/@\s]+@)/i, '$1')
+    }
 }
 
 /**
@@ -12,16 +18,8 @@ function envStrFrom(sourceEnv, key) {
  */
 export function loadAccounts(sourceEnv = process.env) {
     const accounts = []
-    const indexes = [
-        ...new Set(
-            Object.keys(sourceEnv)
-                .map(key => /^ACCOUNT_(\d+)_EMAIL$/.exec(key)?.[1])
-                .filter(Boolean)
-                .map(Number)
-        )
-    ].sort((a, b) => a - b)
 
-    for (const i of indexes) {
+    for (const i of accountIndexesFromEnv(sourceEnv)) {
         const email = envStrFrom(sourceEnv, `ACCOUNT_${i}_EMAIL`)
         if (!email) continue
 
@@ -36,9 +34,12 @@ export function loadAccounts(sourceEnv = process.env) {
             hasTotp: Boolean(envStrFrom(sourceEnv, `ACCOUNT_${i}_TOTP_SECRET`)),
             proxy: proxyUrl
                 ? {
-                      url: proxyUrl,
+                      url: sanitizeProxyUrl(proxyUrl),
                       port: envStrFrom(sourceEnv, `ACCOUNT_${i}_PROXY_PORT`) ?? null,
-                      hasCredentials: Boolean(envStrFrom(sourceEnv, `ACCOUNT_${i}_PROXY_USERNAME`))
+                      hasCredentials: Boolean(
+                          envStrFrom(sourceEnv, `ACCOUNT_${i}_PROXY_USERNAME`) &&
+                          envStrFrom(sourceEnv, `ACCOUNT_${i}_PROXY_PASSWORD`)
+                      )
                   }
                 : null
         })
@@ -46,14 +47,10 @@ export function loadAccounts(sourceEnv = process.env) {
     return accounts
 }
 
-// Kept as a compatibility alias for code that imported the old function name.
-export const loadAccountsMasked = loadAccounts
-
 /**
  * Builds a child-process-only environment override that runs exactly one
- * configured account. The selected slot is remapped to ACCOUNT_1_* because the
- * bot reads account slots sequentially and stops at the first missing email.
- * No secret values leave the API process.
+ * configured account. The selected slot is remapped to ACCOUNT_1_* in the
+ * isolated child environment. No secret values leave the API process.
  */
 export function buildSingleAccountEnv(accountIndex, sourceEnv = process.env) {
     const index = Number(accountIndex)
@@ -95,8 +92,7 @@ export function buildSingleAccountEnv(accountIndex, sourceEnv = process.env) {
 
 /**
  * Builds a dense child-process account environment with selected configured
- * slots excluded. Remaining slots are remapped to ACCOUNT_1..N so gaps never
- * make the bot stop discovering accounts early.
+ * slots excluded. Remaining slots are remapped to ACCOUNT_1..N.
  */
 export function buildExcludedAccountsEnv(excludedAccountIndexes, sourceEnv = process.env) {
     if (!Array.isArray(excludedAccountIndexes)) {

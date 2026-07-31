@@ -6,6 +6,7 @@ export interface Config {
     ensureStreakProtection: boolean
     autoClaimPunchcardRewards: boolean
     skipNonPointTasks: boolean
+    accountDelay: ConfigDelay
     workers: ConfigWorkers
     activities: ConfigActivities
     searchOnBingLocalQueries: boolean
@@ -31,6 +32,7 @@ export interface ConfigSearchSettings {
     runOnZeroPoints: boolean
     maxBonusSearches: number
     parallelSearching: boolean
+    clusterSearch: boolean
     queryEngines: QueryEngineEntry[]
     searchResultVisitTime: number | string
     searchDelay: ConfigDelay

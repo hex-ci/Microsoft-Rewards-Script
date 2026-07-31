@@ -24,25 +24,33 @@ fi
 
 # 3. Accounts: read directly from ACCOUNT_N_* env vars by the app at runtime.
 #
-#    Add one numbered block per account in .env, starting at 1:
+#    Add one numbered block per account in .env:
 #      ACCOUNT_1_EMAIL, ACCOUNT_1_PASSWORD, ...
 #      ACCOUNT_2_EMAIL, ACCOUNT_2_PASSWORD, ...
 #
 #    No accounts.json is generated anymore - loadAccounts() parses the
 #    environment. This is just a fail-fast presence check.
-if [ -z "${ACCOUNT_1_EMAIL:-}" ]; then
-  echo "WARNING: No ACCOUNT_1_EMAIL found in environment - the script will fail." >&2
-  echo "         Set ACCOUNT_1_EMAIL and ACCOUNT_1_PASSWORD in your .env file." >&2
+mapfile -t account_indexes < <(
+  compgen -e | sed -n 's/^ACCOUNT_\([1-9][0-9]*\)_EMAIL$/\1/p' | sort -n -u
+)
+
+acct_count=0
+for i in "${account_indexes[@]}"; do
+  email_var="ACCOUNT_${i}_EMAIL"
+  [ -z "${!email_var:-}" ] && continue
+
+  password_var="ACCOUNT_${i}_PASSWORD"
+  if [ -z "${!password_var:-}" ]; then
+    echo "ERROR: $email_var is set but $password_var is missing." >&2
+    exit 1
+  fi
+  acct_count=$((acct_count + 1))
+done
+
+if [ "$acct_count" -eq 0 ]; then
+  echo "WARNING: No ACCOUNT_N_EMAIL found in environment - the script will fail." >&2
+  echo "         Set at least one ACCOUNT_N_EMAIL and ACCOUNT_N_PASSWORD pair in your .env file." >&2
 else
-  # Count configured accounts for the startup log (stops at first gap)
-  acct_count=0
-  i=1
-  while true; do
-    email_var="ACCOUNT_${i}_EMAIL"
-    [ -z "${!email_var:-}" ] && break
-    acct_count=$((acct_count + 1))
-    i=$((i + 1))
-  done
   echo "[entrypoint] Found $acct_count account(s) in environment"
 fi
 
@@ -64,17 +72,21 @@ fi
 #      CONFIG_DEBUG_LOGS=true            → .debugLogs
 #      CONFIG_ERROR_DIAGNOSTICS=true     → .errorDiagnostics
 #      CONFIG_ENSURE_STREAK_PROTECTION=true → .ensureStreakProtection
+#      CONFIG_AUTO_CLAIM_PUNCHCARD_REWARDS=false → .autoClaimPunchcardRewards
+#      CONFIG_SKIP_NON_POINT_TASKS=true  → .skipNonPointTasks
 #      CONFIG_GLOBAL_TIMEOUT=30sec       → .globalTimeout
+#      CONFIG_ACCOUNT_DELAY_MIN=1min     → .accountDelay.min
+#      CONFIG_ACCOUNT_DELAY_MAX=3min     → .accountDelay.max
 #
 #    Workers (boolean):
 #      CONFIG_WORKER_DAILY_SET           → .workers.doDailySet
 #      CONFIG_WORKER_CLAIM_BONUS_POINTS  → .workers.doClaimBonusPoints
-#      CONFIG_WORKER_SPECIAL_PROMOTIONS  → .workers.doSpecialPromotions
 #      CONFIG_WORKER_MORE_PROMOTIONS     → .workers.doMorePromotions
 #      CONFIG_WORKER_PUNCH_CARDS         → .workers.doPunchCards
 #      CONFIG_WORKER_APP_PROMOTIONS      → .workers.doAppPromotions
 #      CONFIG_WORKER_DESKTOP_SEARCH      → .workers.doDesktopSearch
 #      CONFIG_WORKER_MOBILE_SEARCH       → .workers.doMobileSearch
+#      CONFIG_WORKER_BONUS_SEARCHES      → .workers.doBonusSearches
 #      CONFIG_WORKER_DAILY_CHECKIN       → .workers.doDailyCheckIn
 #      CONFIG_WORKER_READ_TO_EARN        → .workers.doReadToEarn
 #      CONFIG_WORKER_ACTIVATE_SEARCH_PERK → .workers.doActivateSearchPerk
@@ -84,6 +96,7 @@ fi
 #      CONFIG_SEARCH_SCROLL_RANDOM       → .searchSettings.scrollRandomResults
 #      CONFIG_SEARCH_CLICK_RANDOM        → .searchSettings.clickRandomResults
 #      CONFIG_SEARCH_PARALLEL            → .searchSettings.parallelSearching
+#      CONFIG_SEARCH_CLUSTER             → .searchSettings.clusterSearch
 #      CONFIG_SEARCH_DELAY_MIN           → .searchSettings.searchDelay.min
 #      CONFIG_SEARCH_DELAY_MAX           → .searchSettings.searchDelay.max
 #      CONFIG_SEARCH_READ_DELAY_MIN      → .searchSettings.readDelay.min
@@ -113,6 +126,7 @@ fi
 #
 #    Webhooks:
 #      CONFIG_DISCORD_ENABLED / CONFIG_DISCORD_URL
+#      CONFIG_TELEGRAM_ENABLED / CONFIG_TELEGRAM_BOTTOKEN / CONFIG_TELEGRAM_CHATID
 #      CONFIG_NTFY_ENABLED / CONFIG_NTFY_URL / CONFIG_NTFY_TOPIC / CONFIG_NTFY_TOKEN
 #      CONFIG_NTFY_TITLE / CONFIG_NTFY_PRIORITY
 #      CONFIG_NTFY_TAGS                  → comma-separated e.g. "bot,notify"
@@ -129,7 +143,6 @@ CONFIG_EXAMPLE="$SCRIPT_DIR/config.example.json"
 # Returns 0 if config.json exists and is a valid JSON object
 _config_file_is_valid() {
   [ -f "$CONFIG_FILE" ] && \
-  [ "$(wc -c < "$CONFIG_FILE")" -gt 10 ] && \
   jq -e 'type == "object"' "$CONFIG_FILE" > /dev/null 2>&1
 }
 
@@ -180,10 +193,14 @@ if _config_file_is_valid; then
     echo "└─────────────────────────────────────────────────────────┘" >&2
     echo "" >&2
   fi
-else
+elif [ ! -e "$CONFIG_FILE" ] || [ ! -s "$CONFIG_FILE" ]; then
   echo "[entrypoint] No config.json found - generating from config.example.json."
   cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
   echo "[entrypoint] config.json created. Customise via CONFIG_* env vars in compose.yaml."
+else
+  echo "ERROR: Existing $CONFIG_FILE is not a valid JSON object." >&2
+  echo "       Fix it, or empty/delete it to regenerate from config.example.json." >&2
+  exit 1
 fi
 
 # Apply CONFIG_* env var overrides (always runs, regardless of config source)
@@ -191,15 +208,43 @@ echo "[entrypoint] Applying CONFIG_* environment variable overrides..."
 _cfg() {
   # _cfg <env_var_value_or_empty> <jq_path> <type: string|bool|number>
   local val="$1" path="$2" type="${3:-string}"
+  local json_value tmp="$CONFIG_FILE.tmp"
   [ -z "$val" ] && return 0
+
   case "$type" in
-    bool|number)
-      jq --argjson v "$val" "$path = \$v" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+    bool)
+      if [ "$val" != "true" ] && [ "$val" != "false" ]; then
+        echo "ERROR: $path expects true or false, got '$val'." >&2
+        return 1
+      fi
+      json_value="$val"
+      ;;
+    number)
+      if ! json_value=$(jq -en --arg raw "$val" '$raw | tonumber'); then
+        echo "ERROR: $path expects a JSON number, got '$val'." >&2
+        return 1
+      fi
+      ;;
+    string)
+      if ! jq --arg v "$val" "$path = \$v" "$CONFIG_FILE" > "$tmp"; then
+        rm -f "$tmp"
+        return 1
+      fi
+      mv "$tmp" "$CONFIG_FILE"
+      echo "[entrypoint]   $path = $val"
+      return 0
       ;;
     *)
-      jq --arg v "$val" "$path = \$v" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+      echo "ERROR: Internal config override type '$type' is not supported." >&2
+      return 1
       ;;
   esac
+
+  if ! jq --argjson v "$json_value" "$path = \$v" "$CONFIG_FILE" > "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv "$tmp" "$CONFIG_FILE"
   echo "[entrypoint]   $path = $val"
 }
 
@@ -213,9 +258,13 @@ _cfg_array() {
   if [ -z "$val" ]; then
     json_array="[]"
   else
-    json_array=$(echo "$val" | jq -Rc '[split(",") | .[] | ltrimstr(" ") | rtrimstr(" ")]')
+    json_array=$(printf '%s' "$val" | jq -Rc '[split(",") | .[] | ltrimstr(" ") | rtrimstr(" ")]')
   fi
-  jq --argjson v "$json_array" "$path = \$v" "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+  if ! jq --argjson v "$json_array" "$path = \$v" "$CONFIG_FILE" > "$CONFIG_FILE.tmp"; then
+    rm -f "$CONFIG_FILE.tmp"
+    return 1
+  fi
+  mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
   echo "[entrypoint]   $path = [$val]"
 }
 
@@ -223,26 +272,27 @@ _cfg_array() {
 _cfg 'true'                            '.headless'                                  bool
 
 # Top-level
-_cfg "${CONFIG_CLUSTERS:-}"            '.clusters'                                  number
-_cfg "${CONFIG_DEBUG_LOGS:-}"          '.debugLogs'                                 bool
-_cfg "${CONFIG_ERROR_DIAGNOSTICS:-}"   '.errorDiagnostics'                          bool
-_cfg "${CONFIG_ENSURE_STREAK_PROTECTION:-}"   '.ensureStreakProtection'                          bool
-_cfg "${CONFIG_AUTO_CLAIM_PUNCHCARD_REWARDS:-}"  '.autoClaimPunchcardRewards'  bool
-_cfg "${CONFIG_SKIP_NON_POINT_TASKS:-}"          '.skipNonPointTasks'          bool
-_cfg "${CONFIG_GLOBAL_TIMEOUT:-}"      '.globalTimeout'                             string
+_cfg "${CONFIG_CLUSTERS:-}"                         '.clusters'                      number
+_cfg "${CONFIG_DEBUG_LOGS:-}"                       '.debugLogs'                     bool
+_cfg "${CONFIG_ERROR_DIAGNOSTICS:-}"                '.errorDiagnostics'              bool
+_cfg "${CONFIG_ENSURE_STREAK_PROTECTION:-}"         '.ensureStreakProtection'        bool
+_cfg "${CONFIG_AUTO_CLAIM_PUNCHCARD_REWARDS:-}"     '.autoClaimPunchcardRewards'     bool
+_cfg "${CONFIG_SKIP_NON_POINT_TASKS:-}"             '.skipNonPointTasks'             bool
+_cfg "${CONFIG_GLOBAL_TIMEOUT:-}"                   '.globalTimeout'                 string
+_cfg "${CONFIG_ACCOUNT_DELAY_MIN:-}"                '.accountDelay.min'              string
+_cfg "${CONFIG_ACCOUNT_DELAY_MAX:-}"                '.accountDelay.max'              string
 
 # Workers
-_cfg "${CONFIG_WORKER_DAILY_SET:-}"           '.workers.doDailySet'           bool
-_cfg "${CONFIG_WORKER_CLAIM_BONUS_POINTS:-}"  '.workers.doClaimBonusPoints'           bool
-_cfg "${CONFIG_WORKER_SPECIAL_PROMOTIONS:-}"  '.workers.doSpecialPromotions'   bool
-_cfg "${CONFIG_WORKER_MORE_PROMOTIONS:-}"     '.workers.doMorePromotions'      bool
-_cfg "${CONFIG_WORKER_PUNCH_CARDS:-}"         '.workers.doPunchCards'          bool
-_cfg "${CONFIG_WORKER_APP_PROMOTIONS:-}"      '.workers.doAppPromotions'       bool
-_cfg "${CONFIG_WORKER_DESKTOP_SEARCH:-}"      '.workers.doDesktopSearch'       bool
-_cfg "${CONFIG_WORKER_MOBILE_SEARCH:-}"       '.workers.doMobileSearch'        bool
-_cfg "${CONFIG_WORKER_BONUS_SEARCHES:-}"         '.workers.doBonusSearches'        bool
-_cfg "${CONFIG_WORKER_DAILY_CHECKIN:-}"       '.workers.doDailyCheckIn'        bool
-_cfg "${CONFIG_WORKER_READ_TO_EARN:-}"        '.workers.doReadToEarn'          bool
+_cfg "${CONFIG_WORKER_DAILY_SET:-}"            '.workers.doDailySet'            bool
+_cfg "${CONFIG_WORKER_CLAIM_BONUS_POINTS:-}"   '.workers.doClaimBonusPoints'    bool
+_cfg "${CONFIG_WORKER_MORE_PROMOTIONS:-}"      '.workers.doMorePromotions'      bool
+_cfg "${CONFIG_WORKER_PUNCH_CARDS:-}"          '.workers.doPunchCards'          bool
+_cfg "${CONFIG_WORKER_APP_PROMOTIONS:-}"       '.workers.doAppPromotions'       bool
+_cfg "${CONFIG_WORKER_DESKTOP_SEARCH:-}"       '.workers.doDesktopSearch'       bool
+_cfg "${CONFIG_WORKER_MOBILE_SEARCH:-}"        '.workers.doMobileSearch'        bool
+_cfg "${CONFIG_WORKER_BONUS_SEARCHES:-}"       '.workers.doBonusSearches'       bool
+_cfg "${CONFIG_WORKER_DAILY_CHECKIN:-}"        '.workers.doDailyCheckIn'        bool
+_cfg "${CONFIG_WORKER_READ_TO_EARN:-}"         '.workers.doReadToEarn'          bool
 _cfg "${CONFIG_WORKER_ACTIVATE_SEARCH_PERK:-}" '.workers.doActivateSearchPerk'  bool
 _cfg "${CONFIG_WORKER_VISUAL_SEARCH:-}"       '.workers.doVisualSearch'        bool
 
@@ -250,6 +300,7 @@ _cfg "${CONFIG_WORKER_VISUAL_SEARCH:-}"       '.workers.doVisualSearch'        b
 _cfg "${CONFIG_SEARCH_SCROLL_RANDOM:-}"    '.searchSettings.scrollRandomResults'    bool
 _cfg "${CONFIG_SEARCH_CLICK_RANDOM:-}"     '.searchSettings.clickRandomResults'     bool
 _cfg "${CONFIG_SEARCH_PARALLEL:-}"         '.searchSettings.parallelSearching'      bool
+_cfg "${CONFIG_SEARCH_CLUSTER:-}"          '.searchSettings.clusterSearch'          bool
 _cfg "${CONFIG_SEARCH_DELAY_MIN:-}"        '.searchSettings.searchDelay.min'        string
 _cfg "${CONFIG_SEARCH_DELAY_MAX:-}"        '.searchSettings.searchDelay.max'        string
 _cfg "${CONFIG_SEARCH_READ_DELAY_MIN:-}"   '.searchSettings.readDelay.min'          string
