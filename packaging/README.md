@@ -24,11 +24,11 @@ Microsoft-Rewards-Portable-vX.Y.Z.zip
 
 ## Requirements (build machine)
 
-| Tool | Notes |
-|------|-------|
-| Node.js ≥ 18 | Already required by the project |
-| npm | Bundled with Node.js |
-| `unzip` + `zip` | Pre-installed on macOS; `brew install zip` if missing |
+| Tool            | Notes                                                            |
+| --------------- | ---------------------------------------------------------------- |
+| Node.js ≥ 18    | Already required by the project                                  |
+| npm             | Bundled with Node.js                                             |
+| `unzip` + `zip` | Pre-installed on macOS; `brew install zip` if missing            |
 | Internet access | Downloads Node.js for Windows (~30 MB, cached after first build) |
 
 > **No Go, no Rust, no Visual Studio required.**
@@ -69,6 +69,7 @@ The launcher is a small Node.js script that `caxa` bundles together with its
 own embedded Node.js runtime into `microsoft-rewards.exe`.
 
 At runtime it:
+
 1. Resolves the portable package root from `process.execPath`
 2. Sets `PLAYWRIGHT_BROWSERS_PATH` to `<pkgRoot>/browsers/`
 3. Downloads Chromium on first run (via `patchright cli install`)
@@ -77,13 +78,13 @@ At runtime it:
 
 ### Why this approach?
 
-| Concern | How it is addressed |
-|---------|---------------------|
-| Chromium can't be embedded | Downloaded once on first run; lives in `browsers/` |
-| `__dirname` paths | `dist/` layout is identical to local dev – no code changes needed |
-| `cluster.fork()` multi-process | Works natively; child processes use the bundled `node.exe` |
-| Native addon (`fsevents`) | macOS-only optional dep; removed from the Windows package |
-| Cross-platform build | Node.js for Windows downloaded from nodejs.org; no Go/Rust required |
+| Concern                        | How it is addressed                                                 |
+| ------------------------------ | ------------------------------------------------------------------- |
+| Chromium can't be embedded     | Downloaded once on first run; lives in `browsers/`                  |
+| `__dirname` paths              | `dist/` layout is identical to local dev – no code changes needed   |
+| `cluster.fork()` multi-process | Works natively; child processes use the bundled `node.exe`          |
+| Native addon (`fsevents`)      | macOS-only optional dep; removed from the Windows package           |
+| Cross-platform build           | Node.js for Windows downloaded from nodejs.org; no Go/Rust required |
 
 ## Distributing an update
 

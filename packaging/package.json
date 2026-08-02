@@ -1,12 +1,12 @@
 {
-  "name": "microsoft-rewards-packaging",
-  "version": "1.0.0",
-  "description": "Build tooling: packages the project into a portable Windows .exe distribution",
-  "private": true,
-  "scripts": {
-    "build:win": "node build-win.js"
-  },
-  "devDependencies": {
-    "caxa": "^3.0.1"
-  }
+    "name": "microsoft-rewards-packaging",
+    "version": "1.0.0",
+    "description": "Build tooling: packages the project into a portable Windows .exe distribution",
+    "private": true,
+    "scripts": {
+        "build:win": "node build-win.js"
+    },
+    "devDependencies": {
+        "caxa": "^3.0.1"
+    }
 }
