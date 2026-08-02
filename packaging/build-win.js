@@ -38,57 +38,66 @@
 'use strict'
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
-const fs           = require('fs')
-const path         = require('path')
-const https        = require('https')
-const http         = require('http')
+const fs = require('fs')
+const path = require('path')
+const https = require('https')
+const http = require('http')
 const { execSync, spawnSync } = require('child_process')
 const { createWriteStream, mkdirSync, rmSync, copyFileSync, cpSync } = require('fs')
-const os           = require('os')
+const os = require('os')
 
 // ─── Paths ────────────────────────────────────────────────────────────────────
-const PACKAGING_DIR  = path.resolve(__dirname)           // …/packaging/
-const PROJECT_ROOT   = path.resolve(PACKAGING_DIR, '..') // …/Microsoft-Rewards-Script/
-const OUTPUT_DIR     = path.join(PACKAGING_DIR, 'output')
-const CACHE_DIR      = path.join(PACKAGING_DIR, '.cache')
-const LAUNCHER_DIR    = path.join(PACKAGING_DIR, 'launcher')
+const PACKAGING_DIR = path.resolve(__dirname) // …/packaging/
+const PROJECT_ROOT = path.resolve(PACKAGING_DIR, '..') // …/Microsoft-Rewards-Script/
+const OUTPUT_DIR = path.join(PACKAGING_DIR, 'output')
+const CACHE_DIR = path.join(PACKAGING_DIR, '.cache')
+const LAUNCHER_DIR = path.join(PACKAGING_DIR, 'launcher')
 // Isolated staging dir – npm ci runs here so the project's node_modules is NEVER touched
-const STAGING_DIR    = path.join(PACKAGING_DIR, '.staging')
+const STAGING_DIR = path.join(PACKAGING_DIR, '.staging')
 
 // ─── Project metadata ─────────────────────────────────────────────────────────
-const pkgJson        = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'))
-const APP_VERSION    = pkgJson.version                // e.g. "3.1.6"
-const PACKAGE_NAME   = `Microsoft-Rewards-Portable`
+const pkgJson = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'))
+const APP_VERSION = pkgJson.version // e.g. "3.1.6"
+const PACKAGE_NAME = `Microsoft-Rewards-Portable`
 const VERSIONED_NAME = `${PACKAGE_NAME}-v${APP_VERSION}`
-const PACKAGE_DIR    = path.join(OUTPUT_DIR, PACKAGE_NAME)
-const ZIP_PATH       = path.join(OUTPUT_DIR, `${VERSIONED_NAME}.zip`)
+const PACKAGE_DIR = path.join(OUTPUT_DIR, PACKAGE_NAME)
+const ZIP_PATH = path.join(OUTPUT_DIR, `${VERSIONED_NAME}.zip`)
 
 // ─── Node.js for Windows ──────────────────────────────────────────────────────
 // Pin the major version to match the project's engines field (>=24)
-const NODE_VERSION   = '24.2.0'
-const NODE_ZIP_NAME  = `node-v${NODE_VERSION}-win-x64.zip`
-const NODE_ZIP_URL   = `https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ZIP_NAME}`
+const NODE_VERSION = '24.2.0'
+const NODE_ZIP_NAME = `node-v${NODE_VERSION}-win-x64.zip`
+const NODE_ZIP_URL = `https://nodejs.org/dist/v${NODE_VERSION}/${NODE_ZIP_NAME}`
 const NODE_ZIP_CACHE = path.join(CACHE_DIR, NODE_ZIP_NAME)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const BOLD  = s => `\x1b[1m${s}\x1b[0m`
+const BOLD = s => `\x1b[1m${s}\x1b[0m`
 const GREEN = s => `\x1b[32m${s}\x1b[0m`
-const CYAN  = s => `\x1b[36m${s}\x1b[0m`
-const RED   = s => `\x1b[31m${s}\x1b[0m`
-const DIM   = s => `\x1b[2m${s}\x1b[0m`
+const CYAN = s => `\x1b[36m${s}\x1b[0m`
+const RED = s => `\x1b[31m${s}\x1b[0m`
+const DIM = s => `\x1b[2m${s}\x1b[0m`
 
 let step = 0
-function log(msg)   { console.log(`${CYAN(`[${++step}]`)} ${msg}`) }
-function ok(msg)    { console.log(`    ${GREEN('✓')} ${msg}`) }
-function info(msg)  { console.log(`    ${DIM(msg)}`) }
-function die(msg)   { console.error(`\n${RED('ERROR:')} ${msg}\n`); process.exit(1) }
+function log(msg) {
+    console.log(`${CYAN(`[${++step}]`)} ${msg}`)
+}
+function ok(msg) {
+    console.log(`    ${GREEN('✓')} ${msg}`)
+}
+function info(msg) {
+    console.log(`    ${DIM(msg)}`)
+}
+function die(msg) {
+    console.error(`\n${RED('ERROR:')} ${msg}\n`)
+    process.exit(1)
+}
 
 function run(cmd, opts = {}) {
     const result = spawnSync(cmd, {
         shell: true,
         stdio: 'inherit',
         cwd: PROJECT_ROOT,
-        ...opts,
+        ...opts
     })
     if (result.status !== 0) die(`Command failed: ${cmd}`)
 }
@@ -110,9 +119,9 @@ function download(url, destPath) {
         ensureDir(path.dirname(destPath))
         const file = createWriteStream(destPath + '.tmp')
 
-        const request = (u) => {
+        const request = u => {
             const mod = u.startsWith('https') ? https : http
-            mod.get(u, (res) => {
+            mod.get(u, res => {
                 if (res.statusCode === 301 || res.statusCode === 302) {
                     file.close()
                     return request(res.headers.location)
@@ -125,14 +134,16 @@ function download(url, destPath) {
 
                 const total = parseInt(res.headers['content-length'] || '0', 10)
                 let received = 0
-                let lastPct  = -1
+                let lastPct = -1
 
                 res.on('data', chunk => {
                     received += chunk.length
                     if (total) {
                         const pct = Math.floor((received / total) * 100)
                         if (pct !== lastPct && pct % 5 === 0) {
-                            process.stdout.write(`\r    ${DIM(`${pct}%  (${(received/1e6).toFixed(1)} / ${(total/1e6).toFixed(1)} MB)`)}  `)
+                            process.stdout.write(
+                                `\r    ${DIM(`${pct}%  (${(received / 1e6).toFixed(1)} / ${(total / 1e6).toFixed(1)} MB)`)}  `
+                            )
                             lastPct = pct
                         }
                     }
@@ -164,13 +175,33 @@ function download(url, destPath) {
 
     // ── 1. Prerequisites ─────────────────────────────────────────────────────
     log('Checking prerequisites...')
-    try { execSync('npm --version',  { stdio: 'ignore' }) } catch { die('npm not found in PATH') }
-    try { execSync('node --version', { stdio: 'ignore' }) } catch { die('node not found in PATH') }
-    try { execSync('go version',     { stdio: 'ignore' }) } catch { die('Go not found in PATH. Install it: brew install go') }
+    try {
+        execSync('npm --version', { stdio: 'ignore' })
+    } catch {
+        die('npm not found in PATH')
+    }
+    try {
+        execSync('node --version', { stdio: 'ignore' })
+    } catch {
+        die('node not found in PATH')
+    }
+    try {
+        execSync('go version', { stdio: 'ignore' })
+    } catch {
+        die('Go not found in PATH. Install it: brew install go')
+    }
     // Check for zip / unzip (macOS/Linux)
     if (os.platform() !== 'win32') {
-        try { execSync('zip --version', { stdio: 'ignore' }) } catch { die('zip utility not found. Install it (e.g. brew install zip)') }
-        try { execSync('unzip -v',      { stdio: 'ignore' }) } catch { die('unzip utility not found.') }
+        try {
+            execSync('zip --version', { stdio: 'ignore' })
+        } catch {
+            die('zip utility not found. Install it (e.g. brew install zip)')
+        }
+        try {
+            execSync('unzip -v', { stdio: 'ignore' })
+        } catch {
+            die('unzip utility not found.')
+        }
     }
     // Print Go version so it's visible in build log
     const goVer = execSync('go version', { encoding: 'utf8' }).trim()
@@ -184,14 +215,14 @@ function download(url, destPath) {
     // ── 4. Verify / copy JSON data assets ────────────────────────────────────
     log('Verifying JSON data assets in dist/...')
     const assets = [
-        ['src/config.json',            'dist/config.json',            'src/config.example.json'],
-        ['src/accounts.json',          'dist/accounts.json',          'src/accounts.example.json'],
-        ['src/functions/search-queries.json',                'dist/functions/search-queries.json',                null],
-        ['src/functions/bing-search-activity-queries.json',  'dist/functions/bing-search-activity-queries.json',  null],
+        ['src/config.json', 'dist/config.json', 'src/config.example.json'],
+        ['src/accounts.json', 'dist/accounts.json', 'src/accounts.example.json'],
+        ['src/functions/search-queries.json', 'dist/functions/search-queries.json', null],
+        ['src/functions/bing-search-activity-queries.json', 'dist/functions/bing-search-activity-queries.json', null]
     ]
     for (const [src, dest, fallback] of assets) {
-        const absSrc      = path.join(PROJECT_ROOT, src)
-        const absDest     = path.join(PROJECT_ROOT, dest)
+        const absSrc = path.join(PROJECT_ROOT, src)
+        const absDest = path.join(PROJECT_ROOT, dest)
         const absFallback = fallback ? path.join(PROJECT_ROOT, fallback) : null
 
         if (fs.existsSync(absDest)) {
@@ -213,7 +244,7 @@ function download(url, destPath) {
     log('Installing production dependencies (isolated staging)...')
     // Copy only the manifests needed for npm ci into the staging dir
     ensureDir(STAGING_DIR)
-    copyFileSync(path.join(PROJECT_ROOT, 'package.json'),      path.join(STAGING_DIR, 'package.json'))
+    copyFileSync(path.join(PROJECT_ROOT, 'package.json'), path.join(STAGING_DIR, 'package.json'))
     copyFileSync(path.join(PROJECT_ROOT, 'package-lock.json'), path.join(STAGING_DIR, 'package-lock.json'))
     // Run npm ci inside staging – the project root's node_modules is untouched
     run('npm ci --omit=dev --ignore-scripts', { cwd: STAGING_DIR })
@@ -234,7 +265,9 @@ function download(url, destPath) {
     log('Extracting node.exe...')
     const NODE_EXTRACT_DIR = path.join(CACHE_DIR, 'node-extract')
     ensureDir(NODE_EXTRACT_DIR)
-    run(`unzip -o "${NODE_ZIP_CACHE}" "node-v${NODE_VERSION}-win-x64/node.exe" -d "${NODE_EXTRACT_DIR}"`, { cwd: CACHE_DIR })
+    run(`unzip -o "${NODE_ZIP_CACHE}" "node-v${NODE_VERSION}-win-x64/node.exe" -d "${NODE_EXTRACT_DIR}"`, {
+        cwd: CACHE_DIR
+    })
     const extractedNodeExe = path.join(NODE_EXTRACT_DIR, `node-v${NODE_VERSION}-win-x64`, 'node.exe')
     if (!fs.existsSync(extractedNodeExe)) die('Failed to extract node.exe from zip.')
     ok('node.exe extracted')
@@ -247,7 +280,7 @@ function download(url, destPath) {
 
     // ── 8. Copy application files ─────────────────────────────────────────────
     log('Copying application files...')
-    copyDir(path.join(PROJECT_ROOT, 'dist'),        path.join(PACKAGE_DIR, 'dist'))
+    copyDir(path.join(PROJECT_ROOT, 'dist'), path.join(PACKAGE_DIR, 'dist'))
 
     // Exclude sensitive user configurations from the build output
     const sensitiveConfigs = ['config.json', 'accounts.json']
@@ -258,13 +291,19 @@ function download(url, destPath) {
         }
     }
     // Ship only the clean example templates
-    copyFileSync(path.join(PROJECT_ROOT, 'src', 'config.example.json'),   path.join(PACKAGE_DIR, 'dist', 'config.example.json'))
-    copyFileSync(path.join(PROJECT_ROOT, 'src', 'accounts.example.json'), path.join(PACKAGE_DIR, 'dist', 'accounts.example.json'))
+    copyFileSync(
+        path.join(PROJECT_ROOT, 'src', 'config.example.json'),
+        path.join(PACKAGE_DIR, 'dist', 'config.example.json')
+    )
+    copyFileSync(
+        path.join(PROJECT_ROOT, 'src', 'accounts.example.json'),
+        path.join(PACKAGE_DIR, 'dist', 'accounts.example.json')
+    )
     ok('Clean configuration templates placed in dist/ (user configs excluded)')
 
     // node_modules comes from STAGING_DIR, not from the project root
     copyDir(path.join(STAGING_DIR, 'node_modules'), path.join(PACKAGE_DIR, 'node_modules'))
-    copyFileSync(path.join(STAGING_DIR, 'package.json'),      path.join(PACKAGE_DIR, 'package.json'))
+    copyFileSync(path.join(STAGING_DIR, 'package.json'), path.join(PACKAGE_DIR, 'package.json'))
     copyFileSync(path.join(STAGING_DIR, 'package-lock.json'), path.join(PACKAGE_DIR, 'package-lock.json'))
 
     // Remove macOS-only native addon (fsevents) to keep the package clean
@@ -327,7 +366,6 @@ function download(url, destPath) {
     console.log('  Distribute the zip. Users extract it and double-click')
     console.log(`  ${BOLD('microsoft-rewards.exe')} to run.`)
     console.log()
-
 })().catch(err => {
     console.error(`\n${RED('FATAL:')} ${err.message}`)
     process.exit(1)
@@ -401,7 +439,7 @@ This project is licensed under the GNU GPL v3 or later.
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
 function formatBytes(bytes) {
-    if (bytes < 1024)      return `${bytes} B`
-    if (bytes < 1048576)   return `${(bytes/1024).toFixed(1)} KB`
-    return `${(bytes/1048576).toFixed(1)} MB`
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1048576).toFixed(1)} MB`
 }
