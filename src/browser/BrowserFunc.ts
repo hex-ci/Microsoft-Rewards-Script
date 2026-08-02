@@ -259,9 +259,14 @@ export default class BrowserFunc {
 
             const dashboardRendered = /<section\b[^>]*\bid=["']dailyset["']/i.test(sources.join('\n'))
             if (!dashboardRendered) {
-                throw new Error(
-                    'Rewards dashboard did not render (no section#dailyset) - likely a login/redirect issue, aborting'
+                this.bot.logger.error(
+                    this.bot.isMobile,
+                    'BOOTSTRAP',
+                    `Rewards dashboard did not render (no section#dailyset) - likely a login/redirect issue`
                 )
+                // throw new Error(
+                //     'Rewards dashboard did not render (no section#dailyset) - likely a login/redirect issue, aborting'
+                // )
             }
 
             if (!this.bot.reactSnapshot.offers.length) {
