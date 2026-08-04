@@ -4,114 +4,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Microsoft Rewards automation bot written in TypeScript. It uses patchright (a patched Playwright fork) to log into Microsoft/Bing sessions, fetch Rewards dashboards and app APIs, complete daily activities, and run Bing searches for configured accounts.
-
-README warning: V3.x may not fully support the new Bing Rewards interface. `Login.getRewardsSession()` detects the modern dashboard and disables request-token use for that session, but activity support can still vary.
+Microsoft Rewards automation bot in TypeScript. Uses patchright (patched Playwright fork) to log into Microsoft/Bing, fetch Rewards dashboards/APIs, complete daily activities, and run Bing searches for configured accounts. V3.x may not fully support the new Bing Rewards interface — `Login.getRewardsSession()` detects the modern dashboard and disables request-token use for that session.
 
 ## Commands
 
 ```bash
-# Setup: install deps, clear dist, install Chromium for patchright
-npm run pre-build
-
-# Build (clears dist, compiles TS, copies assets via scripts/main/copyAssets.js)
-npm run build
-
-# Run compiled output (from project root)
-npm run start
-
-# Run TypeScript directly
-npm run ts-start
-npm run dev              # ts-start with -dev; enables debug-level logging via process.argv
-
-# Formatting and linting
-npm run format
-npm run format:check
-npm run lint             # eslint . (whole repo)
-npm run lint:fix
-npx eslint src/          # src only
-
-# Utilities
-npm run clear-diagnostics
-npm run clear-sessions   # clears the SQLite session store (sessions.db)
-npm run open-session     # opens a saved/manual browser session; -email handled in script
-npm run kill-chrome-win   # Windows: force-kill leftover Chrome-for-Testing processes
-
-# Docker / Nix
-npm run create-docker
-docker compose up -d
-bash scripts/nix/run.sh  # runs compiled app under nix develop + xvfb-run
+npm run pre-build    # install deps, clear dist, install patchright Chromium
+npm run build        # rimraf dist && tsc && node scripts/main/copyAssets.js
+npm run start        # run compiled output (node ./dist/index.js)
+npm run dev          # ts-node ./src/index.ts -dev (debug logging)
+npm run format       # prettier --write .
+npm run format:check # prettier --check . (CI gate)
+npm run lint         # eslint . (whole repo)
+npm run lint:fix     # eslint . --fix
 ```
 
-There is no test runner or `npm test` script configured. Use `npm run build`, `npm run format:check`, and `npm run lint` as the available local verification commands.
+**No test runner exists.** There is no `npm test` script, no test framework installed. The only local verification commands are `npm run build`, `npm run format:check`, and `npm run lint`. Do not assume `npm test` works.
+
+## Code Style (deviates from defaults — Claude must follow these)
+
+- **Prettier**: 4-space indent, single quotes, **no semicolons**, **no trailing commas**, print width 120, LF endings, `arrowParens: avoid`. (Defaults are 2 spaces, semicolons on, trailing commas `all`, width 80, arrow parens `always` — do not use defaults.)
+- **ESLint**: `eslint:recommended` + `@typescript-eslint/recommended`, `prefer-arrow-callback` error, `@typescript-eslint/no-explicit-any` warn. Flat config in `eslint.config.mjs`. Ignores `dist/`, `scripts/`, `packaging/`.
+- **TypeScript**: strict mode plus `noUnusedLocals`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `noUncheckedIndexedAccess`, `noImplicitOverride`. Target ES2022, module CommonJS, output `dist/`.
 
 ## Runtime Configuration
 
-- Node.js must satisfy `package.json` `engines.node` (`>=24.0.0`), enforced at startup by `checkNodeVersion()`.
-- **Accounts are loaded from environment variables, not a JSON file.** `loadAccounts()` in `src/util/Load.ts` reads `ACCOUNT_<n>_EMAIL`, `ACCOUNT_<n>_PASSWORD`, plus optional `ACCOUNT_<n>_TOTP_SECRET`, `_RECOVERY_EMAIL`, `_GEO_LOCALE`, `_LANG_CODE`, proxy (`_PROXY_URL/PORT/USERNAME/PASSWORD/_PROXY_HTTP`), and `_SAVE_FINGERPRINT_MOBILE/DESKTOP`. It iterates from index 1 until an `EMAIL` is missing; a missing `PASSWORD` is a hard error. A `.env` file is auto-loaded (root → dist → src search order) if present — see `env.example` for the full list.
-- **`config.json` is searched** in this order by `resolveProjectFile()`: current working directory → project root → `dist/` → `src/`. Keep `config.example.json` (project root) as the template; copy to `config.json` and rebuild after changes.
-- `-dev` only enables debug-level logging (`process.argv.includes('-dev')` in `Logger.ts`); it does **not** change which accounts/config are loaded.
-- `loadSessionData()` and the `SessionStore` helpers (`src/util/SessionStore.ts`) persist sessions in a **SQLite database** (`sessions.db`, WAL mode) at `<cwd>/<config.sessionPath>/`. The default `sessionPath` is `sessions`. Each row is keyed by `(email, platform)` where platform is `mobile` or `desktop`, storing the Playwright `storageState` and the generated `fingerprint` as JSON. `closeSessionStore()` checkpoints WAL and closes the DB handle on shutdown.
-- Docker writes generated `config.json` into `dist/config/` and symlinks it into `dist/` so compiled code can load it. `CONFIG_*` env vars override config on each container start; Docker forces headless mode and injects accounts via `ACCOUNT_*` env vars.
+- **Node.js `>=24.0.0`** required, enforced at startup by `checkNodeVersion()` in `src/util/Validator.ts`.
+- **Accounts load from environment variables, not a JSON file.** `loadAccounts()` in `src/util/Load.ts` reads `ACCOUNT_<n>_EMAIL`, `ACCOUNT_<n>_PASSWORD`, plus optional `_TOTP_SECRET`, `_RECOVERY_EMAIL`, `_GEO_LOCALE`, `_LANG_CODE`, proxy fields, and `_SAVE_FINGERPRINT_MOBILE/DESKTOP`. Index starts at 1; a missing `PASSWORD` when `EMAIL` exists is a hard error. A `.env` file is auto-loaded (custom parser, not dotenv) if found. See `env.example` for the full list.
+- **`config.json` search order** (`resolveProjectFile()`): cwd → project root → `dist/` → `src/`. Template is `config.example.json` at project root; copy to `config.json` and rebuild after changes.
+- `-dev` only enables debug-level logging (`process.argv.includes('-dev')` in `Logger.ts`); it does **not** change which accounts or config are loaded.
+- **Sessions persist in SQLite** (`sessions.db`, WAL mode) at `<cwd>/<config.sessionPath>/` (default `sessions`). Built-in `node:sqlite`, not a third-party package. Rows keyed by `(email, platform)` where platform is `mobile` or `desktop`. `closeSessionStore()` checkpoints WAL on shutdown.
+- Docker writes `config.json` into `dist/config/` and symlinks it into `dist/`. `CONFIG_*` env vars override config on each container start; Docker forces headless mode.
 
-## Code Style
+## Architecture Notes
 
-- Prettier: 4 spaces, single quotes, no semicolons, no trailing commas, print width 120, LF endings, `arrowParens: avoid`.
-- ESLint: `eslint:recommended` + `@typescript-eslint/recommended`, single quotes, no semicolons, Unix line endings, `prefer-arrow-callback`, `@typescript-eslint/no-explicit-any` warns.
-- TypeScript is strict with `noUnusedLocals`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `noUncheckedIndexedAccess`, and `noImplicitOverride`.
-- Target is ES2020, module format is CommonJS, output goes to `dist/`.
-
-## High-Level Architecture
-
-### Orchestration
-
-`MicrosoftRewardsBot` in `src/index.ts` owns the core subsystems: config/accounts loading, logger, axios client, browser factory/helpers, login flow, workers, activities, and search manager. `main()` checks the Node version, installs process-level shutdown/error handlers, initializes accounts, then runs either a single-process loop or clustered workers.
-
-When `config.clusters > 1`, the primary process chunks accounts and forks Node `cluster` workers. Workers process their assigned accounts and send stats/log messages back through IPC; webhook queues are flushed before worker or process exit.
-
-### Per-Account Flow
-
-`MicrosoftRewardsBot.Main()` runs one account mostly in a mobile context:
-
-1. Create a mobile browser context with saved cookies/fingerprint if available.
-2. Run the login state machine and save session cookies.
-3. Request a mobile app access token.
-4. Fetch Rewards dashboard data, app dashboard data, and Bing panel flyout data.
-5. Derive locale and point totals from dashboard data.
-6. Run `doOtherPromotions()` unconditionally, then configured workers for app promotions, daily set, special promotions, more promotions, daily check-in, read-to-earn, and punch cards.
-7. Fetch current search counters and delegate mobile/desktop searches to `SearchManager`.
-8. Close browser contexts, save cookies, and report collected points.
-
-### Async Context
-
-`src/index.ts` uses `AsyncLocalStorage<ExecutionContext>` to carry the current account and `isMobile` flag through async call chains. Code that needs the current device mode should use `bot.isMobile`/`getCurrentContext()` rather than adding extra plumbing unless there is a clear boundary reason.
-
-### Browser and Login
-
-`src/browser/Browser.ts` launches patchright Chromium, applies proxy settings, injects fingerprints with `fingerprint-injector`, updates Edge user agents via `UserAgentManager`, disables WebAuthn/passkey browser features, restores cookies, and optionally persists fingerprints per account/device.
-
-`src/browser/auth/Login.ts` is a selector-driven state machine for Microsoft login states such as email/password entry, passkey prompts, KMSI, recovery email, TOTP, passwordless login, and code-login flows. Specialized handlers live in `src/browser/auth/methods/`. Finalization verifies Bing and Rewards sessions and captures `__RequestVerificationToken` when the legacy dashboard exposes it.
-
-`src/browser/BrowserFunc.ts` contains API/browser helper calls: Rewards dashboard with HTML fallback, panel flyout data, app/Xbox dashboard data, earnable points, search counters, current points, cookie header construction, and browser close/session persistence.
-
-### Activities and Workers
-
-`src/functions/Workers.ts` filters dashboard/app promotion collections according to completion, lock state, type, and configured worker toggles. It handles promotion groups such as daily set, more promotions, punch cards, special promotions, app promotions, and direct DAPI “other promotions”.
-
-`src/functions/Activities.ts` is the activity dispatcher. Handlers live in `src/functions/activities/` split by delivery channel: `api/` (UrlReward, ClaimBonusPoints, EnsureStreakProtection, ClaimReward, ActivateSearchPerk, VisualSearch, and experimental `Search`/`SearchOnBing`), `browser/` (Search, SearchOnBing), and `app/` (DailyCheckIn, ReadToEarn, AppReward). The dispatcher selects browser-vs-API search implementations via `config.experimental.apiSearch` / `apiSearchOnBing`. Quest/punchcard completion is coordinated through `src/browser/ReactFunc.ts` (parsing the React-based Bing quest panel into `ParentQuest` / `QuestChild` shapes) and `src/functions/PunchcardManager.ts`.
-
-### Search
-
-`src/functions/SearchManager.ts` decides whether mobile and/or desktop searches are needed from missing point counters and worker toggles. It can run mobile and desktop searches in parallel or sequentially based on `config.searchSettings.parallelSearching`; desktop browser sessions are created only when desktop points are still available.
-
-`src/functions/QueryEngine.ts` builds search query lists from configured sources (`google`, `wikipedia`, `reddit`, `local`), normalizes/deduplicates them, and can expand topics with Bing suggestions/related terms. Query-engine HTTP calls respect `config.proxy.queryEngine`.
-
-### Logging, Webhooks, and Validation
-
-`src/logging/Logger.ts` applies independent console/webhook filters with whitelist/blacklist modes using levels, keywords, and regex patterns. Discord and ntfy senders use `p-queue`; clustered workers forward webhook-relevant logs to the primary process by IPC.
-
-`src/util/Validator.ts` defines Zod schemas for config and accounts (schemas also enforce `engines.node`). Keep `src/interface/*.ts`, the Zod schemas, and `config.example.json` / `env.example` in sync when adding or changing configuration fields.
+- **`src/` compiles to CommonJS; `scripts/` is ESM** (`scripts/package.json` has `"type": "module"`). Don't mix import styles across these boundaries.
+- **Build copies JSON assets**: `scripts/main/copyAssets.js` copies `search-queries.json` and `bing-search-activity-queries.json` from `src/functions/` to `dist/functions/`. Build fails if these are missing.
+- **AsyncLocalStorage** (`src/index.ts`) carries `{ isMobile, account }` through async chains. Use `bot.isMobile`/`getCurrentContext()` rather than passing device mode as a parameter.
+- When `config.clusters > 1`, the primary process forks Node `cluster` workers; accounts are chunked and distributed; workers send stats/logs back via IPC; webhook queues flush before exit.
+- Keep `src/interface/*.ts`, the Zod schemas in `src/util/Validator.ts`, and `config.example.json` / `env.example` in sync when adding or changing configuration fields.
 
 ## Docker
 
-The Dockerfile uses a Node 24 builder stage to run `npm ci`, compile TypeScript, reinstall production dependencies, and install patchright Chromium. The runtime image copies compiled `dist/`, production `node_modules`, `src/config.example.json`, cron scripts, and an entrypoint that handles timezone, account/config generation from environment variables, config drift warnings, cron setup, and scheduled execution.
+Multi-stage Node 24 build. Runtime forces `FORCE_HEADLESS=1` and installs only the Chromium headless shell. Entrypoint handles timezone, account/config generation from env vars, config drift detection, cron setup (`CRON_SCHEDULE`, `TZ`), and optional API mode (`API_MODE=true` requires `API_TOKEN`). `compose.override.yaml` overrides the image to the fork's registry (`ghcr.io/hex-ci/...`) vs upstream (`ghcr.io/thenetsky/...`) in `compose.yaml`.

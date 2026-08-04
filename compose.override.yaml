@@ -1,0 +1,3 @@
+services:
+    microsoft-rewards-script:
+        image: ghcr.io/hex-ci/microsoft-rewards-script:4
