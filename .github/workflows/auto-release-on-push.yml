@@ -1,0 +1,129 @@
+name: Build Docker Image on Push
+
+on:
+    push:
+        branches: ['v4']
+        paths-ignore:
+            - 'package.json'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    packages: write
+
+env:
+    REGISTRY: ghcr.io
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Normalize image name (lowercase)
+              id: image
+              run: |
+                  set -euo pipefail
+                  IMG="$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+                  echo "name=$IMG" >> "$GITHUB_OUTPUT"
+                  echo "LOG: Image: ${{ env.REGISTRY }}/$IMG"
+
+            - name: Skip if auto-release.yml is running for this commit
+              id: gate
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  # This workflow and auto-release.yml can both trigger on a mixed commit
+                  # (one that changes package.json AND other files). auto-release.yml owns
+                  # :latest in that case. Sleep briefly so the concurrent run has time to
+                  # register, then query runs for THIS exact commit.
+                  echo "LOG: Sleeping 20s to let concurrent auto-release run register..."
+                  sleep 20
+
+                  SHA="${{ github.sha }}"
+                  echo "LOG: Looking for 'Release and Docker Push' runs on commit $SHA"
+
+                  set +e
+                  RESP="$(gh api -X GET \
+                      "repos/${{ github.repository }}/actions/runs" \
+                      -f branch="${{ github.ref_name }}" \
+                      -f per_page=50 \
+                      -q '[.workflow_runs[] | select(.name == "Release and Docker Push") | select(.head_sha == "'"$SHA"'")] | .[0:5] | .[] | "\(.status) \(.conclusion) \(.created_at)"' \
+                      2>/dev/null)"
+                  CODE=$?
+                  set -e
+
+                  if [ "$CODE" -ne 0 ]; then
+                      echo "LOG: API query failed (exit $CODE); fail-open and proceed with build."
+                      echo "skip=false" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+
+                  if [ -z "$RESP" ]; then
+                      echo "LOG: No auto-release run found for this commit. Proceeding."
+                      echo "skip=false" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+
+                  echo "LOG: auto-release runs for this commit:"
+                  echo "$RESP"
+
+                  # If auto-release is building (in_progress/queued/waiting) or already
+                  # succeeded for this commit, let it own :latest and skip our build.
+                  if echo "$RESP" | grep -Eq '(in_progress|queued|waiting|success)'; then
+                      echo "LOG: auto-release.yml is handling this commit. Skipping to avoid overwriting :latest."
+                      echo "skip=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "LOG: auto-release ran but did not succeed. Proceeding with this build."
+                      echo "skip=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Log in to GHCR
+              if: steps.gate.outputs.skip != 'true'
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Compute image tags
+              if: steps.gate.outputs.skip != 'true'
+              id: tags
+              run: |
+                  set -euo pipefail
+                  IMAGE="${{ env.REGISTRY }}/${{ steps.image.outputs.name }}"
+                  SHA="${{ github.sha }}"
+                  SHA7="${SHA:0:7}"
+
+                  # Tag with the 7-char short commit hash (e.g. :a112cf2)
+                  TAGS="$IMAGE:$SHA7"
+
+                  # The current line (v4) moves :latest to the newest commit
+                  if [ "${{ github.ref_name }}" = "v4" ]; then
+                      TAGS="$TAGS"$'\n'"$IMAGE:latest"
+                  fi
+
+                  { echo "list<<EOF"; echo "$TAGS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+                  echo "LOG: Tags:"
+                  echo "$TAGS"
+
+            - name: Set up QEMU
+              if: steps.gate.outputs.skip != 'true'
+              uses: docker/setup-qemu-action@v3
+
+            - name: Set up Docker Buildx
+              if: steps.gate.outputs.skip != 'true'
+              uses: docker/setup-buildx-action@v3
+
+            - name: Build and push Docker image
+              if: steps.gate.outputs.skip != 'true'
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  push: true
+                  platforms: linux/amd64,linux/arm64
+                  tags: ${{ steps.tags.outputs.list }}
+                  cache-from: type=gha,scope=${{ github.ref_name }}-commit
+                  cache-to: type=gha,scope=${{ github.ref_name }}-commit,mode=max
