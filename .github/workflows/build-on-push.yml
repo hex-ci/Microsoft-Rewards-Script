@@ -75,8 +75,14 @@ jobs:
                   set -euo pipefail
                   IMAGE="${{ env.REGISTRY }}/${{ steps.image.outputs.name }}"
                   SHA7="${GITHUB_SHA:0:7}"
-                  { echo "list<<EOF"; echo "$IMAGE:$SHA7"; echo "$IMAGE:${{ github.ref_name }}-latest"; echo "EOF"; } \
-                      >> "$GITHUB_OUTPUT"
+                  TAGS="$IMAGE:$SHA7"$'\n'"$IMAGE:${{ github.ref_name }}-latest"
+                  # v5 is the maintained line: every build moves :latest onto it.
+                  if [ "${{ github.ref_name }}" = "v5" ]; then
+                      TAGS="$TAGS"$'\n'"$IMAGE:latest"
+                  fi
+                  { echo "list<<EOF"; echo "$TAGS"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+                  echo "Tags:"
+                  echo "$TAGS"
 
             - name: Set up QEMU
               if: steps.gate.outputs.skip != 'true'
