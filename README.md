@@ -7,6 +7,9 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Donate](https://img.shields.io/badge/Donate-Ko--fi-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/thenetsky)
 
+> [!NOTE]
+> **语言 / Language:** English (current) | [简体中文](README.zh-CN.md)
+
 Microsoft Rewards automation with API and browser modes, saved sessions,
 multiple accounts, localised searches and an optional Control API.
 

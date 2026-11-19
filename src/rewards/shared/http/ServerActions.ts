@@ -54,8 +54,13 @@ export class ServerActions {
 
             const dashboardRendered = /<section\b[^>]*\bid=["']dailyset["']/i.test(sources.join('\n'))
             if (!dashboardRendered) {
-                throw new Error(
-                    'Rewards dashboard did not render (no section#dailyset) - likely a login/redirect issue, aborting'
+                // Fork: warn instead of aborting. Browser mode reads tasks from the Bing
+                // flyout and never needs section#dailyset, so a hard failure here would
+                // discard an otherwise usable session.
+                this.bot.logger.warn(
+                    this.bot.isMobile,
+                    'BOOTSTRAP',
+                    'Rewards dashboard did not render (no section#dailyset) - likely a login/redirect issue; continuing'
                 )
             }
 

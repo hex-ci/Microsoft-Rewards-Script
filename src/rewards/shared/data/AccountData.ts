@@ -14,6 +14,7 @@ import { ServerActions } from '../http/ServerActions'
 import { mergeAccountInfo } from '../parsers/NormalizeRewards'
 import { accountReset } from '../AccountReset'
 import { observePunchCard } from '../PunchCardProgress'
+import { ensureRewardsSessionTicket } from './RewardsSessionTicket'
 
 type UserDataTransport = 'node-http' | 'in-page'
 
@@ -36,6 +37,9 @@ export class AccountData implements AccountDataSource {
         const failures: string[] = []
         const deadline = Date.now() + browserTimeout(this.bot)
         const transports: UserDataTransport[] = this.bot.activePage ? ['node-http', 'in-page'] : ['node-http']
+        // Seed the rewards session ticket before the primary endpoint is tried;
+        // without it /api/getuserinfo only ever returns the sign-in placeholder.
+        await ensureRewardsSessionTicket(this.bot, 'GET-DASHBOARD-DATA-TICKET')
         const attempts = transports.flatMap(via => [
             { via, url: URLs.rewards.userInfoApi, map: mapApiDashboard },
             { via, url: URLs.bing.rewardsFlyoutUserInfo, map: mapFlyoutDashboard }

@@ -22,7 +22,8 @@ export function createBrowserPlan(
     const appApiWorkers = [
         config.workers.doDailyCheckIn && 'doDailyCheckIn',
         config.workers.doAppPromotions && 'doAppPromotions',
-        config.workers.doReadToEarn && 'doReadToEarn'
+        config.workers.doReadToEarn && 'doReadToEarn',
+        config.workers.doOtherPromotions && 'doOtherPromotions'
     ].filter((worker): worker is string => Boolean(worker))
     const searchBonus = findActiveSearchBonus(dashboard)
     const doBonusSearches =

@@ -18,6 +18,7 @@ export const defaultConfig: Config = {
         doMorePromotions: true,
         doPunchCards: true,
         doAppPromotions: true,
+        doOtherPromotions: true,
         doDesktopSearch: true,
         doMobileSearch: true,
         doBonusSearches: false,

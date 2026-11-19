@@ -1,6 +1,6 @@
 const REWARDS = 'https://rewards.bing.com'
 const PLATFORM = 'https://prod.rewardsplatform.microsoft.com'
-const BING = 'https://www.bing.com'
+const BING = 'https://cn.bing.com'
 const LOGIN_LIVE = 'https://login.live.com'
 const LOGIN_MS = 'https://login.microsoftonline.com'
 
@@ -35,6 +35,8 @@ export const URLs = {
     platform: {
         origin: PLATFORM,
         me: (channel: string) => `${PLATFORM}/dapi/me?channel=${channel}&options=613`,
+        // Fork: SAIOS surface (options=612) carries promotions the 613 app response omits.
+        meSAIOS: (channel: string) => `${PLATFORM}/dapi/me?channel=${channel}&options=612`,
         edgeProfile: `${PLATFORM}/dapi/me?channel=edge&options=Profile,Promotions`,
         activities: `${PLATFORM}/dapi/me/activities`
     },

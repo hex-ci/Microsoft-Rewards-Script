@@ -256,6 +256,7 @@ export class RunCoordinator {
                                 ![
                                     'rewards.bing.com',
                                     'www.bing.com',
+                                    'cn.bing.com',
                                     'prod.rewardsplatform.microsoft.com',
                                     'login.live.com',
                                     'login.microsoftonline.com'

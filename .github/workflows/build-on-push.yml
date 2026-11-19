@@ -1,0 +1,98 @@
+name: Build Docker Image on Push
+
+on:
+    push:
+        branches: ['v5']
+        paths-ignore:
+            - 'package.json'
+            - 'package-lock.json'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    packages: write
+
+env:
+    REGISTRY: ghcr.io
+
+jobs:
+    build:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 60
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Normalize image name (lowercase)
+              id: image
+              run: |
+                  set -euo pipefail
+                  IMG="$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+                  echo "name=$IMG" >> "$GITHUB_OUTPUT"
+
+            - name: Skip if the release workflow is publishing this commit
+              id: gate
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  # A commit that bumps package.json triggers both workflows.
+                  # auto-release.yml owns the versioned tags for that commit, so
+                  # wait briefly and defer when it is running or already succeeded.
+                  sleep 20
+                  SHA="${{ github.sha }}"
+                  set +e
+                  RESP="$(gh api -X GET \
+                      "repos/${{ github.repository }}/actions/runs" \
+                      -f branch="${{ github.ref_name }}" \
+                      -f per_page=50 \
+                      -q '[.workflow_runs[] | select(.name == "Release and Docker Push") | select(.head_sha == "'"$SHA"'")] | .[0:5] | .[] | "\(.status) \(.conclusion)"' \
+                      2>/dev/null)"
+                  CODE=$?
+                  set -e
+                  if [ "$CODE" -ne 0 ] || [ -z "$RESP" ]; then
+                      echo "skip=false" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+                  if echo "$RESP" | grep -Eq '(in_progress|queued|waiting|success)'; then
+                      echo "skip=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "skip=false" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - name: Log in to GHCR
+              if: steps.gate.outputs.skip != 'true'
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Compute image tags
+              if: steps.gate.outputs.skip != 'true'
+              id: tags
+              run: |
+                  set -euo pipefail
+                  IMAGE="${{ env.REGISTRY }}/${{ steps.image.outputs.name }}"
+                  SHA7="${GITHUB_SHA:0:7}"
+                  { echo "list<<EOF"; echo "$IMAGE:$SHA7"; echo "$IMAGE:${{ github.ref_name }}-latest"; echo "EOF"; } \
+                      >> "$GITHUB_OUTPUT"
+
+            - name: Set up QEMU
+              if: steps.gate.outputs.skip != 'true'
+              uses: docker/setup-qemu-action@v3
+
+            - name: Set up Docker Buildx
+              if: steps.gate.outputs.skip != 'true'
+              uses: docker/setup-buildx-action@v3
+
+            - name: Build and push Docker image
+              if: steps.gate.outputs.skip != 'true'
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  push: true
+                  platforms: linux/amd64,linux/arm64
+                  tags: ${{ steps.tags.outputs.list }}
+                  cache-from: type=gha,scope=${{ github.ref_name }}-commit
+                  cache-to: type=gha,scope=${{ github.ref_name }}-commit,mode=max

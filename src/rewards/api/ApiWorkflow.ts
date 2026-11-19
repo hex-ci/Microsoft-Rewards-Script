@@ -31,7 +31,8 @@ export class ApiWorkflow implements AccountWorkflow {
     async run(account: Account, data: RewardsState): Promise<AccountRunResult> {
         const { workers, searchSettings } = this.bot.config
         const initialPoints = data.dashboard.userStatus.availablePoints
-        const appWorkers = workers.doDailyCheckIn || workers.doAppPromotions || workers.doReadToEarn
+        const appWorkers =
+            workers.doDailyCheckIn || workers.doAppPromotions || workers.doReadToEarn || workers.doOtherPromotions
         const doBonus =
             workers.doBonusSearches &&
             searchSettings.maxBonusSearches > 0 &&

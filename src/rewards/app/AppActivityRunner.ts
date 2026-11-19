@@ -17,7 +17,8 @@ export class AppActivityRunner {
 
     async prepare(): Promise<PreparedAppActivities> {
         const workers = this.bot.config.workers
-        const enabled = workers.doDailyCheckIn || workers.doAppPromotions || workers.doReadToEarn
+        const enabled =
+            workers.doDailyCheckIn || workers.doAppPromotions || workers.doReadToEarn || workers.doOtherPromotions
         const prepared: PreparedAppActivities = { data: null, earnable: null }
         if (!enabled) return prepared
 
@@ -78,6 +79,7 @@ export class AppActivityRunner {
         if (workers.doDailyCheckIn && prepared.dailyCheckIn)
             await this.bot.activities.dailyCheckIn(prepared.dailyCheckIn)
         if (workers.doAppPromotions) await this.bot.activities.runAppPromotions(prepared.data)
+        if (workers.doOtherPromotions) await this.bot.activities.runOtherPromotions()
         if (workers.doReadToEarn && prepared.readToEarn) await this.bot.activities.readToEarn(prepared.readToEarn)
     }
 }

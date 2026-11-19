@@ -66,6 +66,7 @@ export interface ConfigWorkers {
     doClaimBonusPoints: boolean
     doPunchCards: boolean
     doAppPromotions: boolean
+    doOtherPromotions: boolean
     doDesktopSearch: boolean
     doMobileSearch: boolean
     doBonusSearches: boolean

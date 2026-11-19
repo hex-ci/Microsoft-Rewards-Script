@@ -137,6 +137,7 @@ const ConfigSchema = z.strictObject({
         doClaimBonusPoints: z.boolean(),
         doPunchCards: z.boolean(),
         doAppPromotions: z.boolean(),
+        doOtherPromotions: z.boolean().default(defaultConfig.workers.doOtherPromotions),
         doDesktopSearch: z.boolean(),
         doMobileSearch: z.boolean(),
         doBonusSearches: z.boolean(),

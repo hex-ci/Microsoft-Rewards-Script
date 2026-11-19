@@ -11,6 +11,7 @@ import { VisualSearch } from '../visual/VisualSearch'
 import { DailyCheckIn } from '../../app/actions/DailyCheckIn'
 import { AppReward } from '../../app/actions/AppReward'
 import { AppPromotions } from '../../app/actions/AppPromotions'
+import { OtherPromotions } from '../../app/actions/OtherPromotions'
 import { EdgeBrowsing } from '../edge/EdgeBrowsing'
 import { runTaskWithDelay } from '../TaskPacing'
 import { withActivityBalance } from '../ActivityBalance'
@@ -40,6 +41,11 @@ export default class Activities {
 
     runMorePromotions(data: RewardsState) {
         return new MorePromotions(this.bot).run(data)
+    }
+
+    /** Fork: SAIOS urlreward promotions that the app dashboard does not list. */
+    runOtherPromotions() {
+        return this.runControl('other-promotions', () => new OtherPromotions(this.bot).run())
     }
 
     runMobilePunchCards(data: RewardsState) {

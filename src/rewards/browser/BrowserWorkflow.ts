@@ -35,7 +35,8 @@ export class BrowserWorkflow implements AccountWorkflow {
         try {
             const earnable = await this.bot.rewards.getWebPoints(initialData)
             const workers = this.bot.config.workers
-            const appWorkers = workers.doDailyCheckIn || workers.doAppPromotions || workers.doReadToEarn
+            const appWorkers =
+                workers.doDailyCheckIn || workers.doAppPromotions || workers.doReadToEarn || workers.doOtherPromotions
             this.bot.logger.event(
                 'main',
                 'POINTS',

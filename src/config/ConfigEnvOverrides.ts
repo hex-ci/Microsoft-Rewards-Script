@@ -35,6 +35,7 @@ export const ENV_OVERRIDES: EnvOverrideEntry[] = [
     { env: 'CONFIG_WORKER_MORE_PROMOTIONS', path: 'workers.doMorePromotions', type: 'bool' },
     { env: 'CONFIG_WORKER_PUNCH_CARDS', path: 'workers.doPunchCards', type: 'bool' },
     { env: 'CONFIG_WORKER_APP_PROMOTIONS', path: 'workers.doAppPromotions', type: 'bool' },
+    { env: 'CONFIG_WORKER_OTHER_PROMOTIONS', path: 'workers.doOtherPromotions', type: 'bool' },
     { env: 'CONFIG_WORKER_DESKTOP_SEARCH', path: 'workers.doDesktopSearch', type: 'bool' },
     { env: 'CONFIG_WORKER_MOBILE_SEARCH', path: 'workers.doMobileSearch', type: 'bool' },
     { env: 'CONFIG_WORKER_BONUS_SEARCHES', path: 'workers.doBonusSearches', type: 'bool' },

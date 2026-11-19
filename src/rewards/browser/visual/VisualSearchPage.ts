@@ -239,7 +239,8 @@ export class VisualSearchPage {
             if (url.protocol !== 'https:') return null
 
             const host = url.hostname.toLowerCase()
-            if (host !== 'www.bing.com' && host !== 'bing.com' && host !== 'th.bing.com') return null
+            if (host !== 'www.bing.com' && host !== 'bing.com' && host !== 'th.bing.com' && host !== 'cn.bing.com')
+                return null
 
             const hasThumbnailId = Boolean(url.searchParams.get('id'))
             const isThumbnailPath = url.pathname.toLowerCase() === '/th'
