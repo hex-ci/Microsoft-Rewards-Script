@@ -172,6 +172,63 @@ export class Login {
             .catch(() => false)
     }
 
+    private async tryOpenPasswordlessMethods(page: Page, account: Account): Promise<boolean> {
+        const waitForState = async (accept: (state: LoginState) => boolean): Promise<LoginState | null> => {
+            const deadline = Date.now() + browserTimeout(this.bot)
+            while (Date.now() < deadline) {
+                this.bot.signal.throwIfAborted()
+                const detected = await this.detectCurrentState(page)
+                if (page.url() === detected.url && accept(detected.state)) return detected.state
+                await this.bot.utils.wait(100)
+            }
+            return null
+        }
+
+        if (await this.checkSelector(page, this.selectors.passwordlessOptionOld)) {
+            this.passwordlessMethodSelected = true
+            if (await this.bot.browser.utils.click(page, this.selectors.passwordlessOptionOld)) {
+                await this.waitForIdle(page, 'after Microsoft Authenticator selection')
+                return true
+            }
+            this.passwordlessMethodSelected = false
+        }
+
+        if (await this.checkSelector(page, this.selectors.signInTile)) {
+            return this.handleState({ state: 'SIGN_IN_METHOD_PICKER', url: page.url() }, page, account)
+        }
+
+        const footerSelector = `${this.selectors.footerAction}:visible`
+        const footerCount = await page.locator(footerSelector).count().catch(() => 0)
+
+        for (let index = 0; index < footerCount; index++) {
+            const selector = `${footerSelector} >> nth=${index}`
+            if (!(await this.bot.browser.utils.click(page, selector))) continue
+
+            const nextState = await waitForState(
+                state => state !== 'PASSWORD_INPUT' && state !== 'UNKNOWN' && state !== 'PAGE_TRANSITION'
+            )
+            if (!nextState) continue
+
+            if (
+                nextState === 'SIGN_IN_METHOD_PICKER' ||
+                nextState === 'FOOTER_ACTION' ||
+                nextState === 'LOGIN_PASSWORDLESS' ||
+                nextState === 'PASSWORDLESS_SEND_CODE'
+            ) {
+                this.passwordlessMethodSelected =
+                    nextState === 'LOGIN_PASSWORDLESS' || nextState === 'PASSWORDLESS_SEND_CODE'
+                await this.waitForIdle(page, `after alternative sign-in ${index + 1}`)
+                return true
+            }
+
+            if (!(await this.tryClick(page, this.selectors.backButton, 'Back button'))) return false
+            const restored = await waitForState(state => state === 'PASSWORD_INPUT')
+            if (!restored) return false
+        }
+
+        return false
+    }
+
     private normalizeSignInText(value: string): string {
         return value.replace(/\s+/g, ' ').trim()
     }
@@ -348,9 +405,19 @@ export class Login {
                     this.bot.logger.info(
                         this.bot.isMobile,
                         'LOGIN',
-                        'Password input detected but no password is configured; returning to sign-in methods'
+                        'Password input detected but no password is configured; looking for passwordless sign-in methods'
                     )
-                    if (await this.tryClick(page, this.selectors.backButton, 'Back button')) return true
+                    if (await this.tryOpenPasswordlessMethods(page, account)) return true
+
+                    this.bot.logger.debug(
+                        this.bot.isMobile,
+                        'LOGIN',
+                        'No passwordless alternative found; returning to sign-in methods'
+                    )
+                    if (await this.tryClick(page, this.selectors.backButton, 'Back button')) {
+                        this.passwordlessMethodSelected = false
+                        return true
+                    }
 
                     this.bot.logger.warn(
                         this.bot.isMobile,
