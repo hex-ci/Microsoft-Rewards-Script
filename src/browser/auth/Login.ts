@@ -198,7 +198,10 @@ export class Login {
         }
 
         const footerSelector = `${this.selectors.footerAction}:visible`
-        const footerCount = await page.locator(footerSelector).count().catch(() => 0)
+        const footerCount = await page
+            .locator(footerSelector)
+            .count()
+            .catch(() => 0)
 
         for (let index = 0; index < footerCount; index++) {
             const selector = `${footerSelector} >> nth=${index}`
