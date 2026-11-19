@@ -14,3 +14,7 @@ note
 .env.*
 *.bak
 *.log
+run.cmd
+run.log
+run.ps1
+run.state
